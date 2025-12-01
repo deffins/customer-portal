@@ -1,0 +1,254 @@
+/* Booking Calendar Styles */
+
+.bc-calendar-wrapper {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.bc-calendar-wrapper h2 {
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.bc-calendar-wrapper p {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.bc-calendar {
+    width: 100%;
+}
+
+/* Navigation */
+.bc-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.bc-nav-btn {
+    padding: 10px 20px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.bc-nav-btn:hover:not(:disabled) {
+    background: #2980b9;
+    transform: translateY(-1px);
+}
+
+.bc-nav-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.bc-week-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Calendar Grid */
+.bc-grid {
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.bc-row {
+    display: grid;
+    grid-template-columns: 80px repeat(7, 1fr);
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.bc-row:last-child {
+    border-bottom: none;
+}
+
+.bc-header-row {
+    background: #34495e;
+    color: white;
+    font-weight: 600;
+}
+
+.bc-header-row .bc-cell {
+    border-color: #2c3e50;
+}
+
+.bc-cell {
+    padding: 12px;
+    border-right: 1px solid #e0e0e0;
+    text-align: center;
+    min-height: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.bc-cell:last-child {
+    border-right: none;
+}
+
+/* Time cell */
+.bc-time-cell {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 13px;
+}
+
+/* Day header cells */
+.bc-day-cell {
+    padding: 10px;
+}
+
+.bc-day-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 3px;
+}
+
+.bc-day-date {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+/* Slot cells */
+.bc-slot-cell {
+    position: relative;
+    transition: all 0.2s;
+    cursor: default;
+}
+
+/* Status colors */
+.bc-status-free {
+    background: #27ae60;
+    color: white;
+}
+
+.bc-status-busy {
+    background: #e74c3c;
+    color: white;
+}
+
+/* Clickable slots (admin only) */
+.bc-slot-cell.bc-clickable {
+    cursor: pointer;
+}
+
+.bc-slot-cell.bc-clickable:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.bc-slot-cell.bc-clickable:active {
+    transform: scale(0.98);
+}
+
+/* Past slots */
+.bc-slot-cell.bc-past {
+    background: #95a5a6 !important;
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bc-day-cell.bc-past {
+    opacity: 0.5;
+}
+
+/* Hover effect for admin */
+.bc-slot-cell.bc-clickable.bc-status-free:hover::after {
+    content: 'Click to mark busy';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin-bottom: 5px;
+    pointer-events: none;
+}
+
+.bc-slot-cell.bc-clickable.bc-status-busy:hover::after {
+    content: 'Click to mark free';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    margin-bottom: 5px;
+    pointer-events: none;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .bc-row {
+        grid-template-columns: 60px repeat(7, 1fr);
+    }
+
+    .bc-cell {
+        padding: 8px 4px;
+        font-size: 12px;
+    }
+
+    .bc-day-name {
+        font-size: 12px;
+    }
+
+    .bc-day-date {
+        font-size: 10px;
+    }
+
+    .bc-time-cell {
+        font-size: 11px;
+    }
+
+    .bc-nav {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .bc-week-label {
+        font-size: 14px;
+    }
+
+    .bc-nav-btn {
+        width: 100%;
+    }
+}
+
+/* Admin page specific */
+.wrap .bc-calendar {
+    margin-top: 20px;
+}
+
+.wrap .bc-calendar-wrapper {
+    box-shadow: none;
+}
