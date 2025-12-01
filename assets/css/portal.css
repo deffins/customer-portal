@@ -199,6 +199,9 @@
 }
 
 .checklist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 14px;
     background: #F5F5F5;
     margin: 8px 0;
@@ -220,6 +223,7 @@
     align-items: center;
     cursor: pointer;
     margin: 0;
+    flex: 1;
 }
 
 .checklist-item input[type="checkbox"] {
