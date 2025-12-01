@@ -20,7 +20,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /public_html/wp-content/plugins/customer-portal/
+          server-dir: /domains/deffo.pro/public_html/wp-content/plugins/customer-portal/
           exclude: |
             **/.git*
             **/.git*/**
@@ -29,3 +29,5 @@ jobs:
             **/.DS_Store
             **/deploy.yml
             **/README.md
+            **/DEPLOYMENT.md
+            **/TROUBLESHOOTING.md
