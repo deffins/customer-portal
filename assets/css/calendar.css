@@ -132,25 +132,40 @@
 /* Slot cells */
 .bc-slot-cell {
     position: relative;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: default;
+    animation: fadeIn 0.3s ease-in-out;
 }
 
-/* Status colors */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Status colors with smooth transitions */
 .bc-status-free {
     background: #27ae60;
     color: white;
+    transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .bc-status-blocked,
 .bc-status-busy {
     background: #e74c3c;
     color: white;
+    transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .bc-status-booked {
     background: #E87C52;
     color: white;
+    transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 /* Clickable slots (admin only) */
@@ -159,14 +174,42 @@
 }
 
 .bc-slot-cell.bc-clickable:hover {
-    opacity: 0.8;
-    transform: scale(1.05);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    opacity: 0.85;
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     z-index: 10;
+    transition: all 0.2s ease;
 }
 
 .bc-slot-cell.bc-clickable:active {
-    transform: scale(0.98);
+    transform: scale(0.96);
+    transition: transform 0.1s ease;
+}
+
+/* Loading/updating state */
+.bc-slot-cell[style*="pointer-events: none"] {
+    position: relative;
+    overflow: hidden;
+}
+
+.bc-slot-cell[style*="pointer-events: none"]::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
 }
 
 /* Past slots */

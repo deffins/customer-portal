@@ -659,6 +659,23 @@
 
         debugLog('Booking slot', date, hour);
 
+        // Close modal immediately for snappy UX
+        hideBookingModal();
+
+        // Optimistic update - mark as updating
+        var slotKey = date + '_' + hour;
+        if (window.cpMarkSlotUpdating) {
+            window.cpMarkSlotUpdating(slotKey);
+        }
+
+        // Disable the clicked slot temporarily
+        var cell = document.querySelector('.bc-slot-cell[data-date="' + date + '"][data-hour="' + hour + '"]');
+        if (cell) {
+            cell.style.opacity = '0.6';
+            cell.style.pointerEvents = 'none';
+            cell.style.transition = 'opacity 0.3s ease';
+        }
+
         ajaxPost({
             action: 'cp_book_slot',
             telegram_id: telegramId,
@@ -666,14 +683,15 @@
             hour: hour,
             nonce: CONFIG.nonce
         }, function(response) {
-            hideBookingModal();
-            alert(response.data.message || 'Booking confirmed!');
-            // Reload calendar
+            // Success - reload to confirm
             if (window.cpReloadCalendar) {
                 window.cpReloadCalendar();
             }
         }, function(error) {
-            hideBookingModal();
+            // Error - reload to revert optimistic update
+            if (window.cpReloadCalendar) {
+                window.cpReloadCalendar();
+            }
             alert('Booking failed: ' + escapeHtml(error));
         });
     }
@@ -689,6 +707,23 @@
 
         debugLog('Canceling booking', date, hour);
 
+        // Close modal immediately for snappy UX
+        hideBookingModal();
+
+        // Optimistic update - mark as updating
+        var slotKey = date + '_' + hour;
+        if (window.cpMarkSlotUpdating) {
+            window.cpMarkSlotUpdating(slotKey);
+        }
+
+        // Disable the clicked slot temporarily
+        var cell = document.querySelector('.bc-slot-cell[data-date="' + date + '"][data-hour="' + hour + '"]');
+        if (cell) {
+            cell.style.opacity = '0.6';
+            cell.style.pointerEvents = 'none';
+            cell.style.transition = 'opacity 0.3s ease';
+        }
+
         ajaxPost({
             action: 'cp_cancel_booking',
             telegram_id: telegramId,
@@ -696,14 +731,15 @@
             hour: hour,
             nonce: CONFIG.nonce
         }, function(response) {
-            hideBookingModal();
-            alert(response.data.message || 'Booking cancelled');
-            // Reload calendar
+            // Success - reload to confirm
             if (window.cpReloadCalendar) {
                 window.cpReloadCalendar();
             }
         }, function(error) {
-            hideBookingModal();
+            // Error - reload to revert optimistic update
+            if (window.cpReloadCalendar) {
+                window.cpReloadCalendar();
+            }
             alert('Cancel failed: ' + escapeHtml(error));
         });
     }

@@ -19,6 +19,8 @@
 
     let currentWeekOffset = 0; // 0 = this week, 1 = next week, etc.
     let slotsData = {}; // Store slot data: { "2025-12-02_8": {status: "free", is_mine: false, customer_name: "..."}, ... }
+    let isUpdating = false; // Prevent multi-click
+    let pendingUpdates = new Set(); // Track slots being updated
 
     /**
      * Initialize calendar
@@ -230,8 +232,39 @@
      * Toggle slot (admin only)
      */
     function toggleSlot(date, hour, currentStatus) {
+        const key = `${date}_${hour}`;
+
+        // Prevent multi-click on same slot
+        if (pendingUpdates.has(key)) {
+            return;
+        }
+
+        // Optimistic update - change UI immediately
+        const slotData = slotsData[key] || {status: 'blocked', is_mine: false};
+        const newStatus = slotData.status === 'free' ? 'blocked' : 'free';
+        const oldStatus = slotData.status;
+
+        // Update local data optimistically
+        slotsData[key] = {
+            status: newStatus,
+            is_mine: false,
+            customer_name: null
+        };
+
+        // Mark as updating
+        pendingUpdates.add(key);
+
+        // Update UI with animation
+        const cell = document.querySelector(`.bc-slot-cell[data-date="${date}"][data-hour="${hour}"]`);
+        if (cell) {
+            cell.style.opacity = '0.6';
+            cell.style.transition = 'all 0.2s ease';
+        }
+
+        // Re-render calendar immediately
+        renderCalendar();
+
         const formData = new FormData();
-        // Support both old (bc_toggle_slot) and new (cp_toggle_slot_availability) actions
         const action = window.cpCalendarConfig ? 'cp_toggle_slot_availability' : 'bc_toggle_slot';
         formData.append('action', action);
         formData.append('nonce', CONFIG.nonce);
@@ -244,8 +277,10 @@
         })
         .then(response => response.json())
         .then(data => {
+            pendingUpdates.delete(key);
+
             if (data.success) {
-                const key = `${date}_${hour}`;
+                // Confirm with server response
                 slotsData[key] = {
                     status: data.data.status,
                     is_mine: false,
@@ -253,10 +288,25 @@
                 };
                 renderCalendar();
             } else {
+                // Revert on error
+                slotsData[key] = {
+                    status: oldStatus,
+                    is_mine: false,
+                    customer_name: null
+                };
+                renderCalendar();
                 alert('Error: ' + (data.data.message || data.message || 'Unknown error'));
             }
         })
         .catch(error => {
+            pendingUpdates.delete(key);
+            // Revert on error
+            slotsData[key] = {
+                status: oldStatus,
+                is_mine: false,
+                customer_name: null
+            };
+            renderCalendar();
             console.error('Error toggling slot:', error);
             alert('Failed to update slot');
         });
@@ -307,10 +357,20 @@
                 const slotKey = `${cell.getAttribute('data-date')}_${cell.getAttribute('data-hour')}`;
                 const slotData = slotsData[slotKey] || {status: 'blocked', is_mine: false};
 
+                // Skip if slot is being updated
+                if (pendingUpdates.has(slotKey)) {
+                    cell.style.opacity = '0.6';
+                    cell.style.pointerEvents = 'none';
+                    return;
+                }
+
                 // Free slots - can book
                 if (status === 'free' && !cell.classList.contains('bc-past')) {
                     cell.classList.add('bc-clickable');
                     cell.addEventListener('click', function() {
+                        // Prevent multi-click
+                        if (pendingUpdates.has(slotKey)) return;
+
                         const date = this.getAttribute('data-date');
                         const hour = parseInt(this.getAttribute('data-hour'));
                         if (window.cpShowBookingModal) {
@@ -323,6 +383,9 @@
                 if (status === 'booked' && slotData.is_mine && !cell.classList.contains('bc-past')) {
                     cell.classList.add('bc-clickable');
                     cell.addEventListener('click', function() {
+                        // Prevent multi-click
+                        if (pendingUpdates.has(slotKey)) return;
+
                         const date = this.getAttribute('data-date');
                         const hour = parseInt(this.getAttribute('data-hour'));
                         if (window.cpShowBookingModal) {
@@ -337,6 +400,11 @@
     // Expose reload function for portal.js to call after booking/cancel
     window.cpReloadCalendar = function() {
         loadSlotsForCurrentWeek();
+    };
+
+    // Expose function to mark slot as updating (for optimistic updates)
+    window.cpMarkSlotUpdating = function(slotKey) {
+        pendingUpdates.add(slotKey);
     };
 
     // Initialize on DOM ready
