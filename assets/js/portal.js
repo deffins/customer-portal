@@ -270,14 +270,15 @@
     // ========================================
     function showPortal(user) {
         debugLog('Showing portal for user', user.first_name);
-        
+
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('user-name').textContent = user.first_name;
         document.getElementById('portal-section').style.display = 'block';
-        
+
         loadFiles(user.id);
         loadChecklists(user.id);
         loadLinks(user.id);
+        // Calendar will auto-load via calendar.js init when tab is rendered
     }
     
     function loadFiles(telegramId) {
@@ -589,6 +590,125 @@
     }
     
     // ========================================
+    // CALENDAR & BOOKING FUNCTIONS
+    // ========================================
+
+    // Expose function to get telegram ID for calendar.js
+    window.cpGetUserTelegramId = function() {
+        var savedUserJson = Storage.get('cp_user');
+        if (savedUserJson) {
+            try {
+                var user = JSON.parse(savedUserJson);
+                return user.id;
+            } catch(e) {
+                return null;
+            }
+        }
+        return null;
+    };
+
+    // Show booking modal
+    window.cpShowBookingModal = function(action, date, hour) {
+        var modal = document.getElementById('booking-modal');
+        var titleEl = document.getElementById('modal-title');
+        var messageEl = document.getElementById('modal-message');
+        var confirmBtn = document.getElementById('modal-confirm');
+
+        if (!modal || !titleEl || !messageEl || !confirmBtn) return;
+
+        // Format date and time
+        var dateObj = new Date(date + 'T00:00:00');
+        var dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        var timeStr = hour.toString().padStart(2, '0') + ':00';
+
+        if (action === 'book') {
+            titleEl.textContent = 'Confirm Booking';
+            messageEl.textContent = 'Book appointment for ' + dateStr + ' at ' + timeStr + '?';
+            confirmBtn.textContent = 'Book Appointment';
+            confirmBtn.onclick = function() {
+                bookSlot(date, hour);
+            };
+        } else if (action === 'cancel') {
+            titleEl.textContent = 'Cancel Booking';
+            messageEl.textContent = 'Cancel your booking for ' + dateStr + ' at ' + timeStr + '?';
+            confirmBtn.textContent = 'Cancel Booking';
+            confirmBtn.onclick = function() {
+                cancelBooking(date, hour);
+            };
+        }
+
+        modal.style.display = 'flex';
+    };
+
+    // Hide booking modal
+    function hideBookingModal() {
+        var modal = document.getElementById('booking-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    // Book a slot
+    function bookSlot(date, hour) {
+        var telegramId = window.cpGetUserTelegramId();
+        if (!telegramId) {
+            alert('Please log in to book appointments');
+            hideBookingModal();
+            return;
+        }
+
+        debugLog('Booking slot', date, hour);
+
+        ajaxPost({
+            action: 'cp_book_slot',
+            telegram_id: telegramId,
+            date: date,
+            hour: hour,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            hideBookingModal();
+            alert(response.data.message || 'Booking confirmed!');
+            // Reload calendar
+            if (window.cpReloadCalendar) {
+                window.cpReloadCalendar();
+            }
+        }, function(error) {
+            hideBookingModal();
+            alert('Booking failed: ' + escapeHtml(error));
+        });
+    }
+
+    // Cancel a booking
+    function cancelBooking(date, hour) {
+        var telegramId = window.cpGetUserTelegramId();
+        if (!telegramId) {
+            alert('Please log in to cancel bookings');
+            hideBookingModal();
+            return;
+        }
+
+        debugLog('Canceling booking', date, hour);
+
+        ajaxPost({
+            action: 'cp_cancel_booking',
+            telegram_id: telegramId,
+            date: date,
+            hour: hour,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            hideBookingModal();
+            alert(response.data.message || 'Booking cancelled');
+            // Reload calendar
+            if (window.cpReloadCalendar) {
+                window.cpReloadCalendar();
+            }
+        }, function(error) {
+            hideBookingModal();
+            alert('Cancel failed: ' + escapeHtml(error));
+        });
+    }
+
+    // ========================================
     // INITIALIZATION
     // ========================================
     function init() {
@@ -654,6 +774,18 @@
                 document.getElementById(tab + '-tab').classList.add('active');
             });
         });
+
+        // Modal cancel button
+        var modalCancelBtn = document.getElementById('modal-cancel');
+        if (modalCancelBtn) {
+            modalCancelBtn.addEventListener('click', hideBookingModal);
+        }
+
+        // Modal overlay click to close
+        var modalOverlay = document.querySelector('.cp-modal-overlay');
+        if (modalOverlay) {
+            modalOverlay.addEventListener('click', hideBookingModal);
+        }
     }
     
     // Run on DOM ready

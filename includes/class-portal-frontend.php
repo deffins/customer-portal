@@ -23,7 +23,14 @@ class CP_Frontend {
             array(),
             CP_VERSION
         );
-        
+
+        wp_enqueue_style(
+            'cp-calendar',
+            CP_PLUGIN_URL . 'assets/css/calendar.css',
+            array(),
+            CP_VERSION
+        );
+
         // JS
         wp_enqueue_script(
             'cp-portal',
@@ -32,13 +39,29 @@ class CP_Frontend {
             CP_VERSION,
             true
         );
-        
+
+        wp_enqueue_script(
+            'cp-calendar',
+            CP_PLUGIN_URL . 'assets/js/calendar.js',
+            array(),
+            CP_VERSION,
+            true
+        );
+
         // Pass data to JS
         wp_localize_script('cp-portal', 'cpConfig', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('cp_nonce'),
             'botUsername' => get_option('cp_telegram_bot_username'),
             'debug' => false
+        ));
+
+        // Calendar config for customer view
+        wp_localize_script('cp-calendar', 'cpCalendarConfig', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('cp_nonce'),
+            'isAdmin' => false,
+            'isCustomer' => true
         ));
     }
     
@@ -69,30 +92,57 @@ class CP_Frontend {
                     <button class="tab-button active" data-tab="files">Files</button>
                     <button class="tab-button" data-tab="checklists">Checklists</button>
                     <button class="tab-button" data-tab="links">Links</button>
+                    <button class="tab-button" data-tab="calendar">Calendar</button>
                 </div>
-                
+
                 <div id="files-tab" class="tab-content active">
                     <h3>Your Files</h3>
                     <div id="files-container">
                         <p>Loading your files...</p>
                     </div>
                 </div>
-                
+
                 <div id="checklists-tab" class="tab-content">
                     <h3>Your Checklists</h3>
                     <div id="checklists-container">
                         <p>Loading your checklists...</p>
                     </div>
                 </div>
-                
+
                 <div id="links-tab" class="tab-content">
                     <h3>Useful Links</h3>
                     <div id="links-container">
                         <p>Loading your links...</p>
                     </div>
                 </div>
-                
+
+                <div id="calendar-tab" class="tab-content">
+                    <h3>Book an Appointment</h3>
+                    <div class="calendar-legend">
+                        <span class="legend-item"><span class="dot dot-free"></span> Available</span>
+                        <span class="legend-item"><span class="dot dot-booked-me"></span> Your Booking</span>
+                        <span class="legend-item"><span class="dot dot-booked-other"></span> Unavailable</span>
+                        <span class="legend-item"><span class="dot dot-blocked"></span> Not Available</span>
+                    </div>
+                    <div id="bc-calendar-container">
+                        <p>Loading calendar...</p>
+                    </div>
+                </div>
+
                 <button id="logout-btn" class="button">Logout</button>
+            </div>
+
+            <!-- Booking Modal -->
+            <div id="booking-modal" class="cp-modal" style="display: none;">
+                <div class="cp-modal-overlay"></div>
+                <div class="cp-modal-content">
+                    <h4 id="modal-title"></h4>
+                    <p id="modal-message"></p>
+                    <div class="cp-modal-actions">
+                        <button id="modal-cancel" class="button">Cancel</button>
+                        <button id="modal-confirm" class="button button-primary">Confirm</button>
+                    </div>
+                </div>
             </div>
         </div>
         <?php

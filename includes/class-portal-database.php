@@ -77,12 +77,63 @@ class CP_Database {
         ) $charset_collate;";
         dbDelta($sql_links);
         
+        // Calendar slots table (from booking-calendar plugin)
+        $calendar_table = $wpdb->prefix . 'booking_calendar_slots';
+        $sql_calendar = "CREATE TABLE {$calendar_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            slot_date date NOT NULL,
+            slot_hour tinyint NOT NULL,
+            status varchar(20) DEFAULT 'blocked',
+            booked_by int(11) DEFAULT NULL,
+            booked_at datetime DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY slot_unique (slot_date, slot_hour),
+            KEY slot_date (slot_date),
+            KEY status (status),
+            KEY booked_by (booked_by)
+        ) $charset_collate;";
+        dbDelta($sql_calendar);
+
+        // Run calendar schema upgrade (for existing installations)
+        $this->upgrade_calendar_schema();
+
         // Default options
         add_option('cp_telegram_bot_token', '');
         add_option('cp_telegram_bot_username', '');
         add_option('cp_google_client_id', '');
         add_option('cp_google_client_secret', '');
         add_option('cp_google_refresh_token', '');
+        add_option('cp_calendar_version', '1.0');
+    }
+
+    /**
+     * Upgrade calendar schema from old booking-calendar plugin
+     */
+    public function upgrade_calendar_schema() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'booking_calendar_slots';
+
+        // Check if table exists
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$table}'");
+        if (!$table_exists) {
+            return; // Table will be created by dbDelta
+        }
+
+        // Check if booked_by column exists
+        $columns = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'booked_by'");
+
+        if (empty($columns)) {
+            // Add new columns
+            $wpdb->query("ALTER TABLE {$table}
+                ADD COLUMN booked_by INT(11) DEFAULT NULL AFTER status,
+                ADD COLUMN booked_at DATETIME DEFAULT NULL AFTER booked_by,
+                ADD KEY booked_by (booked_by)");
+        }
+
+        // Migrate existing data: 'busy' -> 'blocked'
+        $wpdb->query("UPDATE {$table} SET status = 'blocked' WHERE status = 'busy'");
     }
     
     /**
@@ -266,11 +317,246 @@ class CP_Database {
     public function archive_checklist($checklist_id) {
         global $wpdb;
         $table = $wpdb->prefix . 'customer_portal_checklists';
-        
+
         $wpdb->update(
             $table,
             array('status' => 'archived'),
             array('id' => $checklist_id)
         );
+    }
+
+    /**
+     * CALENDAR METHODS
+     */
+
+    /**
+     * Get calendar slots with booking info
+     */
+    public function get_calendar_slots($start_date, $end_date, $user_id = null) {
+        global $wpdb;
+        $calendar_table = $wpdb->prefix . 'booking_calendar_slots';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        $sql = "SELECT s.*, u.first_name, u.last_name";
+        if ($user_id) {
+            $sql .= ", IF(s.booked_by = %d, 1, 0) as is_mine";
+        }
+        $sql .= " FROM {$calendar_table} s
+                 LEFT JOIN {$users_table} u ON s.booked_by = u.id
+                 WHERE s.slot_date >= %s AND s.slot_date <= %s
+                 ORDER BY s.slot_date ASC, s.slot_hour ASC";
+
+        if ($user_id) {
+            return $wpdb->get_results($wpdb->prepare($sql, $user_id, $start_date, $end_date));
+        } else {
+            return $wpdb->get_results($wpdb->prepare($sql, $start_date, $end_date));
+        }
+    }
+
+    /**
+     * Book a slot (with race condition protection)
+     */
+    public function book_slot($date, $hour, $user_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'booking_calendar_slots';
+
+        // Validate past slot
+        $now = new DateTime('now', new DateTimeZone('UTC'));
+        $slot_datetime = new DateTime("{$date} {$hour}:00:00", new DateTimeZone('UTC'));
+        if ($slot_datetime < $now) {
+            return array('success' => false, 'message' => 'Cannot book past slots');
+        }
+
+        // Start transaction
+        $wpdb->query('START TRANSACTION');
+
+        // Lock row for update
+        $slot = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE slot_date = %s AND slot_hour = %d FOR UPDATE",
+            $date,
+            $hour
+        ));
+
+        if (!$slot) {
+            $wpdb->query('ROLLBACK');
+            return array('success' => false, 'message' => 'Slot not found');
+        }
+
+        if ($slot->status !== 'free') {
+            $wpdb->query('ROLLBACK');
+            return array('success' => false, 'message' => 'Slot is not available');
+        }
+
+        // Update slot
+        $result = $wpdb->update(
+            $table,
+            array(
+                'status' => 'booked',
+                'booked_by' => $user_id,
+                'booked_at' => current_time('mysql')
+            ),
+            array('slot_date' => $date, 'slot_hour' => $hour)
+        );
+
+        if ($result === false) {
+            $wpdb->query('ROLLBACK');
+            return array('success' => false, 'message' => 'Database error');
+        }
+
+        $wpdb->query('COMMIT');
+        return array('success' => true, 'message' => 'Booking confirmed!');
+    }
+
+    /**
+     * Cancel booking (customer)
+     */
+    public function cancel_booking($date, $hour, $user_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'booking_calendar_slots';
+
+        // Verify ownership
+        $slot = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE slot_date = %s AND slot_hour = %d",
+            $date,
+            $hour
+        ));
+
+        if (!$slot) {
+            return array('success' => false, 'message' => 'Slot not found');
+        }
+
+        if ($slot->booked_by != $user_id) {
+            return array('success' => false, 'message' => 'Not authorized');
+        }
+
+        // Cancel booking
+        $result = $wpdb->update(
+            $table,
+            array(
+                'status' => 'free',
+                'booked_by' => null,
+                'booked_at' => null
+            ),
+            array('slot_date' => $date, 'slot_hour' => $hour, 'booked_by' => $user_id)
+        );
+
+        if ($result === false) {
+            return array('success' => false, 'message' => 'Database error');
+        }
+
+        return array('success' => true, 'message' => 'Booking cancelled');
+    }
+
+    /**
+     * Admin cancel booking
+     */
+    public function admin_cancel_booking($date, $hour) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'booking_calendar_slots';
+
+        $result = $wpdb->update(
+            $table,
+            array(
+                'status' => 'free',
+                'booked_by' => null,
+                'booked_at' => null
+            ),
+            array('slot_date' => $date, 'slot_hour' => $hour)
+        );
+
+        if ($result === false) {
+            return array('success' => false, 'message' => 'Database error');
+        }
+
+        return array('success' => true, 'message' => 'Booking cancelled');
+    }
+
+    /**
+     * Toggle slot availability (admin only)
+     */
+    public function toggle_slot_availability($date, $hour) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'booking_calendar_slots';
+
+        // Get current status
+        $slot = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE slot_date = %s AND slot_hour = %d",
+            $date,
+            $hour
+        ));
+
+        if (!$slot) {
+            // Create slot if doesn't exist
+            $wpdb->insert(
+                $table,
+                array(
+                    'slot_date' => $date,
+                    'slot_hour' => $hour,
+                    'status' => 'free'
+                )
+            );
+            return array('success' => true, 'status' => 'free');
+        }
+
+        // Cannot toggle booked slots
+        if ($slot->status === 'booked') {
+            return array('success' => false, 'message' => 'Cannot modify booked slots. Cancel booking first.');
+        }
+
+        // Toggle between free and blocked
+        $new_status = ($slot->status === 'free') ? 'blocked' : 'free';
+
+        $wpdb->update(
+            $table,
+            array('status' => $new_status),
+            array('slot_date' => $date, 'slot_hour' => $hour)
+        );
+
+        return array('success' => true, 'status' => $new_status);
+    }
+
+    /**
+     * Get all bookings with filters
+     */
+    public function get_all_bookings($filters = array()) {
+        global $wpdb;
+        $calendar_table = $wpdb->prefix . 'booking_calendar_slots';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        $where = array("s.status = 'booked'");
+        $params = array();
+
+        if (!empty($filters['start_date'])) {
+            $where[] = "s.slot_date >= %s";
+            $params[] = $filters['start_date'];
+        }
+
+        if (!empty($filters['end_date'])) {
+            $where[] = "s.slot_date <= %s";
+            $params[] = $filters['end_date'];
+        }
+
+        if (!empty($filters['user_id'])) {
+            $where[] = "s.booked_by = %d";
+            $params[] = $filters['user_id'];
+        }
+
+        if (!empty($filters['upcoming_only'])) {
+            $where[] = "s.slot_date >= CURDATE()";
+        }
+
+        $where_clause = implode(' AND ', $where);
+
+        $sql = "SELECT s.*, u.first_name, u.last_name, u.telegram_id
+                FROM {$calendar_table} s
+                LEFT JOIN {$users_table} u ON s.booked_by = u.id
+                WHERE {$where_clause}
+                ORDER BY s.slot_date ASC, s.slot_hour ASC";
+
+        if (!empty($params)) {
+            return $wpdb->get_results($wpdb->prepare($sql, $params));
+        } else {
+            return $wpdb->get_results($sql);
+        }
     }
 }

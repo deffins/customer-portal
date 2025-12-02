@@ -142,8 +142,14 @@
     color: white;
 }
 
+.bc-status-blocked,
 .bc-status-busy {
     background: #e74c3c;
+    color: white;
+}
+
+.bc-status-booked {
+    background: #E87C52;
     color: white;
 }
 

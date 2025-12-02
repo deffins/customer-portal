@@ -27,6 +27,16 @@ class CP_Ajax {
         // Links
         add_action('wp_ajax_get_customer_links', array($this, 'get_customer_links'));
         add_action('wp_ajax_nopriv_get_customer_links', array($this, 'get_customer_links'));
+
+        // Calendar
+        add_action('wp_ajax_cp_get_calendar_slots', array($this, 'get_calendar_slots'));
+        add_action('wp_ajax_nopriv_cp_get_calendar_slots', array($this, 'get_calendar_slots'));
+        add_action('wp_ajax_cp_book_slot', array($this, 'book_slot'));
+        add_action('wp_ajax_nopriv_cp_book_slot', array($this, 'book_slot'));
+        add_action('wp_ajax_cp_cancel_booking', array($this, 'cancel_booking'));
+        add_action('wp_ajax_nopriv_cp_cancel_booking', array($this, 'cancel_booking'));
+        add_action('wp_ajax_cp_admin_cancel_booking', array($this, 'admin_cancel_booking'));
+        add_action('wp_ajax_cp_toggle_slot_availability', array($this, 'toggle_slot_availability'));
     }
     
     /**
@@ -247,21 +257,240 @@ class CP_Ajax {
      */
     public function get_customer_links() {
         check_ajax_referer('cp_nonce', 'nonce');
-        
+
         if (!isset($_POST['telegram_id'])) {
             wp_send_json_error(array('message' => 'Telegram ID missing'));
             return;
         }
-        
+
         $telegram_id = intval($_POST['telegram_id']);
         $user = CP()->database->get_user_by_telegram_id($telegram_id);
-        
+
         if (!$user) {
             wp_send_json_error(array('message' => 'User not found'));
             return;
         }
-        
+
         $links = CP()->database->get_user_links($user->id);
         wp_send_json_success(array('links' => $links));
+    }
+
+    /**
+     * CALENDAR AJAX HANDLERS
+     */
+
+    /**
+     * Get calendar slots
+     */
+    public function get_calendar_slots() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['start_date']) || !isset($_POST['end_date'])) {
+            wp_send_json_error(array('message' => 'Date range missing'));
+            return;
+        }
+
+        $start_date = sanitize_text_field($_POST['start_date']);
+        $end_date = sanitize_text_field($_POST['end_date']);
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+            return;
+        }
+
+        $user_id = null;
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if ($user) {
+                $user_id = $user->id;
+            }
+        }
+
+        $slots = CP()->database->get_calendar_slots($start_date, $end_date, $user_id);
+
+        // Format for frontend
+        $formatted_slots = array();
+        foreach ($slots as $slot) {
+            $formatted_slots[] = array(
+                'slot_date' => $slot->slot_date,
+                'slot_hour' => intval($slot->slot_hour),
+                'status' => $slot->status,
+                'booked_by' => $slot->booked_by ? intval($slot->booked_by) : null,
+                'booked_at' => $slot->booked_at,
+                'customer_name' => $slot->booked_by ? trim($slot->first_name . ' ' . $slot->last_name) : null,
+                'is_mine' => isset($slot->is_mine) ? (bool)$slot->is_mine : false
+            );
+        }
+
+        wp_send_json_success(array('slots' => $formatted_slots));
+    }
+
+    /**
+     * Book a slot
+     */
+    public function book_slot() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id']) || !isset($_POST['date']) || !isset($_POST['hour'])) {
+            wp_send_json_error(array('message' => 'Missing parameters'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $date = sanitize_text_field($_POST['date']);
+        $hour = intval($_POST['hour']);
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+            return;
+        }
+
+        // Validate hour range
+        if ($hour < 8 || $hour > 20) {
+            wp_send_json_error(array('message' => 'Invalid hour'));
+            return;
+        }
+
+        // Get user
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        // Book slot
+        $result = CP()->database->book_slot($date, $hour, $user->id);
+
+        if ($result['success']) {
+            wp_send_json_success(array(
+                'message' => $result['message'],
+                'slot' => array('slot_date' => $date, 'slot_hour' => $hour)
+            ));
+        } else {
+            wp_send_json_error(array('message' => $result['message']));
+        }
+    }
+
+    /**
+     * Cancel booking (customer)
+     */
+    public function cancel_booking() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id']) || !isset($_POST['date']) || !isset($_POST['hour'])) {
+            wp_send_json_error(array('message' => 'Missing parameters'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $date = sanitize_text_field($_POST['date']);
+        $hour = intval($_POST['hour']);
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+            return;
+        }
+
+        // Get user
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        // Cancel booking
+        $result = CP()->database->cancel_booking($date, $hour, $user->id);
+
+        if ($result['success']) {
+            wp_send_json_success(array('message' => $result['message']));
+        } else {
+            wp_send_json_error(array('message' => $result['message']));
+        }
+    }
+
+    /**
+     * Admin cancel booking
+     */
+    public function admin_cancel_booking() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        // Check admin capability
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+            return;
+        }
+
+        if (!isset($_POST['date']) || !isset($_POST['hour'])) {
+            wp_send_json_error(array('message' => 'Missing parameters'));
+            return;
+        }
+
+        $date = sanitize_text_field($_POST['date']);
+        $hour = intval($_POST['hour']);
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+            return;
+        }
+
+        // Cancel booking
+        $result = CP()->database->admin_cancel_booking($date, $hour);
+
+        if ($result['success']) {
+            wp_send_json_success(array('message' => $result['message']));
+        } else {
+            wp_send_json_error(array('message' => $result['message']));
+        }
+    }
+
+    /**
+     * Toggle slot availability (admin only)
+     */
+    public function toggle_slot_availability() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        // Check admin capability
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+            return;
+        }
+
+        if (!isset($_POST['date']) || !isset($_POST['hour'])) {
+            wp_send_json_error(array('message' => 'Missing parameters'));
+            return;
+        }
+
+        $date = sanitize_text_field($_POST['date']);
+        $hour = intval($_POST['hour']);
+
+        // Validate date format
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+            return;
+        }
+
+        // Validate hour range
+        if ($hour < 8 || $hour > 20) {
+            wp_send_json_error(array('message' => 'Invalid hour'));
+            return;
+        }
+
+        // Toggle slot
+        $result = CP()->database->toggle_slot_availability($date, $hour);
+
+        if ($result['success']) {
+            wp_send_json_success(array(
+                'status' => $result['status'],
+                'date' => $date,
+                'hour' => $hour
+            ));
+        } else {
+            wp_send_json_error(array('message' => $result['message']));
+        }
     }
 }

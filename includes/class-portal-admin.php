@@ -47,7 +47,16 @@ class CP_Admin {
             'customer-portal-links',
             array($this, 'links_page')
         );
-        
+
+        add_submenu_page(
+            'customer-portal',
+            'Calendar & Bookings',
+            'Calendar',
+            'manage_options',
+            'customer-portal-calendar',
+            array($this, 'calendar_page')
+        );
+
         add_submenu_page(
             'customer-portal',
             'Settings',
@@ -716,6 +725,119 @@ class CP_Admin {
                     <input type="submit" name="cp_save_settings" class="button button-primary" value="Save Settings">
                 </p>
             </form>
+        </div>
+        <?php
+    }
+
+    /**
+     * Calendar & Bookings page
+     */
+    public function calendar_page() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions.'));
+        }
+
+        // Enqueue calendar assets
+        wp_enqueue_style(
+            'cp-calendar',
+            CP_PLUGIN_URL . 'assets/css/calendar.css',
+            array(),
+            CP_VERSION
+        );
+
+        wp_enqueue_script(
+            'cp-calendar',
+            CP_PLUGIN_URL . 'assets/js/calendar.js',
+            array(),
+            CP_VERSION,
+            true
+        );
+
+        wp_localize_script('cp-calendar', 'cpCalendarConfig', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('cp_nonce'),
+            'isAdmin' => true,
+            'isCustomer' => false
+        ));
+
+        // Handle admin cancel booking
+        if (isset($_POST['action']) && $_POST['action'] === 'admin_cancel_booking' && isset($_POST['cp_admin_nonce'])) {
+            if (!wp_verify_nonce($_POST['cp_admin_nonce'], 'cp_admin_action')) {
+                wp_die(__('Security check failed.'));
+            }
+
+            $date = sanitize_text_field($_POST['date']);
+            $hour = intval($_POST['hour']);
+
+            $result = CP()->database->admin_cancel_booking($date, $hour);
+            if ($result['success']) {
+                echo '<div class="notice notice-success"><p>' . esc_html($result['message']) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>' . esc_html($result['message']) . '</p></div>';
+            }
+        }
+
+        // Get bookings for the list
+        $bookings = CP()->database->get_all_bookings(array('upcoming_only' => true));
+
+        ?>
+        <div class="wrap">
+            <h1>Calendar & Bookings</h1>
+
+            <div class="cp-calendar-admin-section">
+                <h2>Manage Availability</h2>
+                <p>Click any time slot to toggle between <strong>free</strong> (green) and <strong>blocked</strong> (red).</p>
+                <p><strong>Note:</strong> Booked slots (orange) cannot be toggled directly. Cancel the booking first.</p>
+
+                <div class="calendar-legend" style="margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 4px;">
+                    <strong>Legend:</strong>
+                    <span style="margin-left: 20px;"><span style="display: inline-block; width: 15px; height: 15px; background: #27ae60; border-radius: 3px; margin-right: 5px;"></span> Free (Available)</span>
+                    <span style="margin-left: 20px;"><span style="display: inline-block; width: 15px; height: 15px; background: #E87C52; border-radius: 3px; margin-right: 5px;"></span> Booked</span>
+                    <span style="margin-left: 20px;"><span style="display: inline-block; width: 15px; height: 15px; background: #e74c3c; border-radius: 3px; margin-right: 5px;"></span> Blocked</span>
+                    <span style="margin-left: 20px;"><span style="display: inline-block; width: 15px; height: 15px; background: #95a5a6; border-radius: 3px; margin-right: 5px;"></span> Past</span>
+                </div>
+
+                <div id="bc-calendar-container"></div>
+            </div>
+
+            <div class="cp-bookings-list-section" style="margin-top: 40px;">
+                <h2>Upcoming Bookings</h2>
+
+                <?php if (empty($bookings)): ?>
+                    <p>No upcoming bookings.</p>
+                <?php else: ?>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Booked At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($bookings as $booking): ?>
+                                <tr>
+                                    <td><?php echo esc_html(trim($booking->first_name . ' ' . $booking->last_name)); ?></td>
+                                    <td><?php echo esc_html(date('F j, Y', strtotime($booking->slot_date))); ?></td>
+                                    <td><?php echo esc_html(sprintf('%02d:00', $booking->slot_hour)); ?></td>
+                                    <td><?php echo esc_html(date('F j, Y g:i A', strtotime($booking->booked_at))); ?></td>
+                                    <td>
+                                        <form method="post" style="display: inline;">
+                                            <input type="hidden" name="action" value="admin_cancel_booking">
+                                            <input type="hidden" name="date" value="<?php echo esc_attr($booking->slot_date); ?>">
+                                            <input type="hidden" name="hour" value="<?php echo esc_attr($booking->slot_hour); ?>">
+                                            <input type="hidden" name="cp_admin_nonce" value="<?php echo wp_create_nonce('cp_admin_action'); ?>">
+                                            <button type="submit" class="button button-small" onclick="return confirm('Cancel this booking?');">Cancel</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
         </div>
         <?php
     }

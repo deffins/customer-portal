@@ -6,17 +6,19 @@
 (function() {
     'use strict';
 
-    const CONFIG = window.bcConfig || {
+    // Support both old (bcConfig) and new (cpCalendarConfig) configurations
+    const CONFIG = window.cpCalendarConfig || window.bcConfig || {
         ajaxUrl: '',
         nonce: '',
-        isAdmin: false
+        isAdmin: false,
+        isCustomer: false
     };
 
     const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
     const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     let currentWeekOffset = 0; // 0 = this week, 1 = next week, etc.
-    let slotsData = {}; // Store slot data: { "2025-12-02_8": "free", ... }
+    let slotsData = {}; // Store slot data: { "2025-12-02_8": {status: "free", is_mine: false, customer_name: "..."}, ... }
 
     /**
      * Initialize calendar
@@ -72,13 +74,36 @@
                 const dateStr = formatDate(date);
                 const slotKey = `${dateStr}_${hour}`;
                 const isPast = isPastSlot(date, hour);
-                const status = slotsData[slotKey] || 'busy';
-                const clickable = CONFIG.isAdmin && !isPast;
+                const slotData = slotsData[slotKey] || {status: 'blocked', is_mine: false};
+                const status = slotData.status;
 
-                html += `<div class="bc-cell bc-slot-cell bc-status-${status} ${isPast ? 'bc-past' : ''} ${clickable ? 'bc-clickable' : ''}"
+                // Determine clickability
+                let clickable = false;
+                let title = '';
+
+                if (CONFIG.isAdmin && !isPast && status !== 'booked') {
+                    clickable = true;
+                } else if (status === 'booked') {
+                    if (slotData.customer_name) {
+                        title = `Booked by ${slotData.customer_name}`;
+                    } else {
+                        title = 'Booked';
+                    }
+                }
+
+                // Additional classes for customer view
+                let extraClass = '';
+                if (status === 'booked' && slotData.is_mine) {
+                    extraClass = 'bc-booked-mine';
+                } else if (status === 'booked' && !slotData.is_mine) {
+                    extraClass = 'bc-booked-other';
+                }
+
+                html += `<div class="bc-cell bc-slot-cell bc-status-${status} ${extraClass} ${isPast ? 'bc-past' : ''} ${clickable ? 'bc-clickable' : ''}"
                               data-date="${dateStr}"
                               data-hour="${hour}"
-                              data-status="${status}">
+                              data-status="${status}"
+                              ${title ? `title="${title}"` : ''}>
                          </div>`;
             });
 
@@ -163,10 +188,20 @@
         const endDate = formatDate(weekDates[6]);
 
         const formData = new FormData();
-        formData.append('action', 'bc_get_slots');
+        // Support both old (bc_get_slots) and new (cp_get_calendar_slots) actions
+        const action = CONFIG.isAdmin && !CONFIG.isCustomer ? 'cp_get_calendar_slots' : (window.cpCalendarConfig ? 'cp_get_calendar_slots' : 'bc_get_slots');
+        formData.append('action', action);
         formData.append('nonce', CONFIG.nonce);
         formData.append('start_date', startDate);
         formData.append('end_date', endDate);
+
+        // Add telegram_id for customer view
+        if (CONFIG.isCustomer && window.cpGetUserTelegramId) {
+            const telegramId = window.cpGetUserTelegramId();
+            if (telegramId) {
+                formData.append('telegram_id', telegramId);
+            }
+        }
 
         fetch(CONFIG.ajaxUrl, {
             method: 'POST',
@@ -179,7 +214,11 @@
                 slotsData = {};
                 data.data.slots.forEach(slot => {
                     const key = `${slot.slot_date}_${slot.slot_hour}`;
-                    slotsData[key] = slot.status;
+                    slotsData[key] = {
+                        status: slot.status,
+                        is_mine: slot.is_mine || false,
+                        customer_name: slot.customer_name || null
+                    };
                 });
                 renderCalendar();
             }
@@ -192,7 +231,9 @@
      */
     function toggleSlot(date, hour, currentStatus) {
         const formData = new FormData();
-        formData.append('action', 'bc_toggle_slot');
+        // Support both old (bc_toggle_slot) and new (cp_toggle_slot_availability) actions
+        const action = window.cpCalendarConfig ? 'cp_toggle_slot_availability' : 'bc_toggle_slot';
+        formData.append('action', action);
         formData.append('nonce', CONFIG.nonce);
         formData.append('date', date);
         formData.append('hour', hour);
@@ -205,10 +246,14 @@
         .then(data => {
             if (data.success) {
                 const key = `${date}_${hour}`;
-                slotsData[key] = data.data.status;
+                slotsData[key] = {
+                    status: data.data.status,
+                    is_mine: false,
+                    customer_name: null
+                };
                 renderCalendar();
             } else {
-                alert('Error: ' + (data.data.message || 'Unknown error'));
+                alert('Error: ' + (data.data.message || data.message || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -254,7 +299,45 @@
                 });
             });
         }
+
+        // Slot clicks (customer mode)
+        if (CONFIG.isCustomer) {
+            document.querySelectorAll('.bc-slot-cell').forEach(cell => {
+                const status = cell.getAttribute('data-status');
+                const slotKey = `${cell.getAttribute('data-date')}_${cell.getAttribute('data-hour')}`;
+                const slotData = slotsData[slotKey] || {status: 'blocked', is_mine: false};
+
+                // Free slots - can book
+                if (status === 'free' && !cell.classList.contains('bc-past')) {
+                    cell.classList.add('bc-clickable');
+                    cell.addEventListener('click', function() {
+                        const date = this.getAttribute('data-date');
+                        const hour = parseInt(this.getAttribute('data-hour'));
+                        if (window.cpShowBookingModal) {
+                            window.cpShowBookingModal('book', date, hour);
+                        }
+                    });
+                }
+
+                // My bookings - can cancel
+                if (status === 'booked' && slotData.is_mine && !cell.classList.contains('bc-past')) {
+                    cell.classList.add('bc-clickable');
+                    cell.addEventListener('click', function() {
+                        const date = this.getAttribute('data-date');
+                        const hour = parseInt(this.getAttribute('data-hour'));
+                        if (window.cpShowBookingModal) {
+                            window.cpShowBookingModal('cancel', date, hour);
+                        }
+                    });
+                }
+            });
+        }
     }
+
+    // Expose reload function for portal.js to call after booking/cancel
+    window.cpReloadCalendar = function() {
+        loadSlotsForCurrentWeek();
+    };
 
     // Initialize on DOM ready
     if (document.readyState === 'loading') {
