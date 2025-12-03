@@ -6,7 +6,8 @@
       "Bash(git push:*)",
       "Bash(dir:*)",
       "Bash(powershell -Command:*)",
-      "Bash(tar:*)"
+      "Bash(tar:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
