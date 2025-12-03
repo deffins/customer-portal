@@ -1,0 +1,35 @@
+name: Deploy Test Branch to Hostinger
+
+on:
+  push:
+    branches:
+      - test
+
+jobs:
+  deploy:
+    name: Deploy to WordPress Test Plugin Directory
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /home/u226352978/domains/fons.lv/public_html/wp-content/plugins/customer-portal/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.vscode/**
+            **/.DS_Store
+            **/deploy.yml
+            **/deploy-test.yml
+            **/README.md
+            **/DEPLOYMENT.md
+            **/TROUBLESHOOTING.md
+            **/GIT-WORKFLOW-SIMPLE.md
