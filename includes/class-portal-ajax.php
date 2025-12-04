@@ -401,8 +401,9 @@ class CP_Ajax {
                         $response['meet_link'] = $event_result['meet_link'];
                     }
                 } else {
-                    // Do not fail booking if calendar fails; surface message
+                    // Do not fail booking if calendar fails; surface message and log for admin
                     $response['google_calendar_warning'] = $event_result['message'];
+                    error_log('[Customer Portal] Google Calendar create_event failed: ' . $event_result['message']);
                 }
             }
 
@@ -711,10 +712,12 @@ class CP_Ajax {
      */
     private function create_google_event($date, $hour, $client_email, $user) {
         // Ensure Google credentials exist
-        $access_token = $this->get_google_access_token();
-        if (!$access_token) {
-            return array('success' => false, 'message' => 'Google Calendar not configured');
+        $token_info = $this->get_google_access_token();
+        if (empty($token_info['token'])) {
+            $message = isset($token_info['error']) ? $token_info['error'] : 'Google Calendar not configured';
+            return array('success' => false, 'message' => $message);
         }
+        $access_token = $token_info['token'];
 
         // Build start/end times (1 hour duration) using site timezone
         $timezone = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone(get_option('timezone_string') ?: 'UTC');
@@ -757,7 +760,7 @@ class CP_Ajax {
         );
 
         if (is_wp_error($response)) {
-            return array('success' => false, 'message' => 'Google Calendar request failed');
+            return array('success' => false, 'message' => 'Google Calendar request failed: ' . $response->get_error_message());
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -796,7 +799,7 @@ class CP_Ajax {
         $refresh_token = get_option('cp_google_refresh_token');
 
         if (!$client_id || !$client_secret || !$refresh_token) {
-            return null;
+            return array('token' => null, 'error' => 'Missing Google client credentials or refresh token');
         }
 
         $token_response = wp_remote_post('https://oauth2.googleapis.com/token', array(
@@ -809,16 +812,17 @@ class CP_Ajax {
         ));
 
         if (is_wp_error($token_response)) {
-            return null;
+            return array('token' => null, 'error' => 'Token request failed: ' . $token_response->get_error_message());
         }
 
         $token_data = json_decode(wp_remote_retrieve_body($token_response), true);
 
         if (!isset($token_data['access_token'])) {
-            return null;
+            $err = isset($token_data['error_description']) ? $token_data['error_description'] : (isset($token_data['error']) ? $token_data['error'] : 'Unknown token error');
+            return array('token' => null, 'error' => 'No access token: ' . $err);
         }
 
-        return $token_data['access_token'];
+        return array('token' => $token_data['access_token']);
     }
 
     /**
