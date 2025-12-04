@@ -6,6 +6,11 @@
 if (!defined('ABSPATH')) exit;
 
 class CP_Database {
+
+    public function __construct() {
+        // Ensure any new columns are present for existing installs
+        $this->upgrade_user_schema();
+    }
     
     /**
      * Plugin activation - create tables
@@ -24,6 +29,7 @@ class CP_Database {
             first_name varchar(255),
             last_name varchar(255),
             username varchar(255),
+            email varchar(255),
             drive_folder_id varchar(255),
             is_active tinyint(1) DEFAULT 1,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
@@ -98,6 +104,7 @@ class CP_Database {
 
         // Run calendar schema upgrade (for existing installations)
         $this->upgrade_calendar_schema();
+        $this->upgrade_user_schema();
 
         // Survey assignments table
         $survey_assignments_table = $wpdb->prefix . 'cp_survey_assignments';
@@ -191,6 +198,22 @@ class CP_Database {
         
         return $wpdb->get_results(
             "SELECT id, telegram_id, first_name, last_name FROM {$table} WHERE is_active = 1 ORDER BY first_name"
+        );
+    }
+
+    /**
+     * Update user email (with schema safety)
+     */
+    public function update_user_email($user_id, $email) {
+        if (empty($email)) return;
+        $this->upgrade_user_schema();
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+        $wpdb->update(
+            $table,
+            array('email' => $email),
+            array('id' => $user_id)
         );
     }
     
@@ -757,6 +780,24 @@ class CP_Database {
                 "SELECT * FROM {$table} WHERE user_id = %d ORDER BY created_at DESC",
                 $user_id
             ));
+        }
+    }
+
+    /**
+     * Upgrade user schema to add email column if missing
+     */
+    private function upgrade_user_schema() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        $column = $wpdb->get_var($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s AND COLUMN_NAME = 'email'",
+            $table,
+            $wpdb->dbname
+        ));
+
+        if (!$column) {
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN email varchar(255) NULL AFTER username");
         }
     }
 }

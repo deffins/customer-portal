@@ -39,6 +39,8 @@ class CP_Ajax {
         add_action('wp_ajax_cp_toggle_slot_availability', array($this, 'toggle_slot_availability'));
         add_action('wp_ajax_cp_get_my_appointments', array($this, 'get_my_appointments'));
         add_action('wp_ajax_nopriv_cp_get_my_appointments', array($this, 'get_my_appointments'));
+        add_action('wp_ajax_cp_get_user_profile', array($this, 'get_user_profile'));
+        add_action('wp_ajax_nopriv_cp_get_user_profile', array($this, 'get_user_profile'));
 
         // Surveys
         add_action('wp_ajax_cp_get_assigned_surveys', array($this, 'get_assigned_surveys'));
@@ -389,6 +391,9 @@ class CP_Ajax {
 
             // Create Google Calendar event if email provided and Google is configured
             if (!empty($client_email)) {
+                // Save email on the user record for admin visibility
+                CP()->database->update_user_email($user->id, $client_email);
+
                 $event_result = $this->create_google_event($date, $hour, $client_email, $user);
                 if ($event_result['success']) {
                     $response['google_event_id'] = $event_result['event_id'];
@@ -814,5 +819,36 @@ class CP_Ajax {
         }
 
         return $token_data['access_token'];
+    }
+
+    /**
+     * Get user profile (basic info + email)
+     */
+    public function get_user_profile() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id'])) {
+            wp_send_json_error(array('message' => 'Telegram ID missing'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        wp_send_json_success(array(
+            'user' => array(
+                'id' => intval($user->id),
+                'telegram_id' => intval($user->telegram_id),
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'username' => $user->username,
+                'email' => $user->email
+            )
+        ));
     }
 }

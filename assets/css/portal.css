@@ -512,8 +512,10 @@
 
 .cp-modal-actions {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .cp-modal-actions .button {
@@ -523,6 +525,9 @@
     cursor: pointer;
     font-size: 15px;
     transition: all 0.2s;
+    flex: 1 1 0;
+    min-width: 180px;
+    text-align: center;
 }
 
 .cp-modal-actions .button:not(.button-primary) {

@@ -114,6 +114,7 @@ class CP_Admin {
                         <th>Telegram ID</th>
                         <th>Name</th>
                         <th>Username</th>
+                        <th>Email</th>
                         <th>Drive Folder</th>
                         <th>Status</th>
                         <th>Registered</th>
@@ -122,13 +123,14 @@ class CP_Admin {
                 </thead>
                 <tbody>
                     <?php if (empty($users)): ?>
-                        <tr><td colspan="7">No users yet.</td></tr>
+                        <tr><td colspan="8">No users yet.</td></tr>
                     <?php else: ?>
                         <?php foreach ($users as $user): ?>
                         <tr>
                             <td><?php echo esc_html($user->telegram_id); ?></td>
                             <td><?php echo esc_html($user->first_name . ' ' . $user->last_name); ?></td>
                             <td><?php echo esc_html($user->username ? '@' . $user->username : '-'); ?></td>
+                            <td><?php echo !empty($user->email) ? esc_html($user->email) : '-'; ?></td>
                             <td>
                                 <form method="post" style="display:inline-block; max-width: 350px;">
                                     <?php wp_nonce_field('cp_admin_action', 'cp_admin_nonce'); ?>

@@ -275,6 +275,9 @@
         document.getElementById('user-name').textContent = user.first_name;
         document.getElementById('portal-section').style.display = 'block';
 
+        // Prime user email from profile (and cache)
+        loadUserProfile(user.id);
+
         loadFiles(user.id);
         loadChecklists(user.id);
         loadLinks(user.id);
@@ -612,6 +615,7 @@
     // ========================================
 
     var pendingBooking = null; // Holds the slot while collecting optional email
+    var userEmail = null; // Stored email from profile (skip modal when available)
 
     // Expose function to get telegram ID for calendar.js
     window.cpGetUserTelegramId = function() {
@@ -626,6 +630,38 @@
         }
         return null;
     };
+
+    // Load user profile (to retrieve stored email)
+    function loadUserProfile(telegramId) {
+        if (!telegramId) return;
+
+        ajaxPost({
+            action: 'cp_get_user_profile',
+            nonce: CONFIG.nonce,
+            telegram_id: telegramId
+        }, function(response) {
+            if (response.data && response.data.user) {
+                var email = response.data.user.email;
+                if (email && isValidEmail(email)) {
+                    userEmail = email;
+                    Storage.set('cp_last_email', email);
+                }
+            }
+            // If no email on profile but we have a cached one, use it
+            if (!userEmail) {
+                var cached = Storage.get('cp_last_email');
+                if (cached && isValidEmail(cached)) {
+                    userEmail = cached;
+                }
+            }
+        }, function() {
+            // Ignore errors; just keep existing cached email if any
+            var cached = Storage.get('cp_last_email');
+            if (cached && isValidEmail(cached)) {
+                userEmail = cached;
+            }
+        });
+    }
 
     // Show booking modal
     window.cpShowBookingModal = function(action, date, hour) {
@@ -646,6 +682,11 @@
             messageEl.textContent = 'Book appointment for ' + dateStr + ' at ' + timeStr + '?';
             confirmBtn.textContent = 'Book Appointment';
             confirmBtn.onclick = function() {
+                // If we already have an email on file, skip the email modal
+                if (userEmail && isValidEmail(userEmail)) {
+                    bookSlot(date, hour, userEmail);
+                    return;
+                }
                 // Move to email capture step
                 pendingBooking = { date: date, hour: hour };
                 hideBookingModal();
@@ -736,6 +777,7 @@
             // Persist email for convenience if provided
             if (clientEmail) {
                 Storage.set('cp_last_email', clientEmail);
+                userEmail = clientEmail;
             }
             // Success - reload to confirm
             if (window.cpReloadCalendar) {
