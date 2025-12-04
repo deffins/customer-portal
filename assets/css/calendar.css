@@ -225,7 +225,7 @@
 
 /* Hover effect for admin */
 .bc-slot-cell.bc-clickable.bc-status-free:hover::after {
-    content: 'Click to mark busy';
+    content: 'Book appointment';
     position: absolute;
     bottom: 100%;
     left: 50%;

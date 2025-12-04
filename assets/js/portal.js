@@ -611,6 +611,8 @@
     // CALENDAR & BOOKING FUNCTIONS
     // ========================================
 
+    var pendingBooking = null; // Holds the slot while collecting optional email
+
     // Expose function to get telegram ID for calendar.js
     window.cpGetUserTelegramId = function() {
         var savedUserJson = Storage.get('cp_user');
@@ -644,7 +646,10 @@
             messageEl.textContent = 'Book appointment for ' + dateStr + ' at ' + timeStr + '?';
             confirmBtn.textContent = 'Book Appointment';
             confirmBtn.onclick = function() {
-                bookSlot(date, hour);
+                // Move to email capture step
+                pendingBooking = { date: date, hour: hour };
+                hideBookingModal();
+                showEmailModal();
             };
         } else if (action === 'cancel') {
             titleEl.textContent = 'Cancel Booking';
@@ -666,8 +671,33 @@
         }
     }
 
+    // Show email capture modal (optional)
+    function showEmailModal() {
+        var modal = document.getElementById('email-modal');
+        var input = document.getElementById('email-input');
+        if (!modal || !input) return;
+
+        var savedEmail = Storage.get('cp_last_email');
+        input.value = savedEmail ? savedEmail : '';
+        modal.style.display = 'flex';
+        input.focus();
+    }
+
+    function hideEmailModal() {
+        var modal = document.getElementById('email-modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    function isValidEmail(email) {
+        if (!email) return true; // optional
+        var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
     // Book a slot
-    function bookSlot(date, hour) {
+    function bookSlot(date, hour, clientEmail) {
         var telegramId = window.cpGetUserTelegramId();
         if (!telegramId) {
             alert('Please log in to book appointments');
@@ -677,8 +707,9 @@
 
         debugLog('Booking slot', date, hour);
 
-        // Close modal immediately for snappy UX
+        // Close modals immediately for snappy UX
         hideBookingModal();
+        hideEmailModal();
 
         // Optimistic update - mark as updating
         var slotKey = date + '_' + hour;
@@ -699,8 +730,13 @@
             telegram_id: telegramId,
             date: date,
             hour: hour,
+            client_email: clientEmail ? clientEmail : '',
             nonce: CONFIG.nonce
         }, function(response) {
+            // Persist email for convenience if provided
+            if (clientEmail) {
+                Storage.set('cp_last_email', clientEmail);
+            }
             // Success - reload to confirm
             if (window.cpReloadCalendar) {
                 window.cpReloadCalendar();
@@ -819,10 +855,45 @@
             modalCancelBtn.addEventListener('click', hideBookingModal);
         }
 
-        // Modal overlay click to close
-        var modalOverlay = document.querySelector('.cp-modal-overlay');
-        if (modalOverlay) {
-            modalOverlay.addEventListener('click', hideBookingModal);
+        // Modal overlay click to close (both modals)
+        document.querySelectorAll('.cp-modal-overlay').forEach(function(overlay) {
+            overlay.addEventListener('click', function() {
+                hideBookingModal();
+                hideEmailModal();
+                pendingBooking = null;
+            });
+        });
+
+        // Email modal buttons
+        var emailSkipBtn = document.getElementById('email-skip');
+        var emailSaveBtn = document.getElementById('email-save');
+        var emailInput = document.getElementById('email-input');
+
+        if (emailSkipBtn) {
+            emailSkipBtn.addEventListener('click', function() {
+                if (!pendingBooking) {
+                    hideEmailModal();
+                    return;
+                }
+                bookSlot(pendingBooking.date, pendingBooking.hour, null);
+                pendingBooking = null;
+            });
+        }
+
+        if (emailSaveBtn) {
+            emailSaveBtn.addEventListener('click', function() {
+                if (!pendingBooking) {
+                    hideEmailModal();
+                    return;
+                }
+                var email = emailInput ? emailInput.value.trim() : '';
+                if (email && !isValidEmail(email)) {
+                    alert('Please enter a valid email address or leave it blank.');
+                    return;
+                }
+                bookSlot(pendingBooking.date, pendingBooking.hour, email || null);
+                pendingBooking = null;
+            });
         }
 
         // Load Telegram widget only when user is not already logged in

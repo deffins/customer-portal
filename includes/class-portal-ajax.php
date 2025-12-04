@@ -351,6 +351,7 @@ class CP_Ajax {
         $telegram_id = intval($_POST['telegram_id']);
         $date = sanitize_text_field($_POST['date']);
         $hour = intval($_POST['hour']);
+        $client_email = isset($_POST['client_email']) ? sanitize_text_field($_POST['client_email']) : '';
 
         // Validate date format
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -361,6 +362,12 @@ class CP_Ajax {
         // Validate hour range
         if ($hour < 8 || $hour > 20) {
             wp_send_json_error(array('message' => 'Invalid hour'));
+            return;
+        }
+
+        // Validate optional email
+        if (!empty($client_email) && !is_email($client_email)) {
+            wp_send_json_error(array('message' => 'Invalid email address'));
             return;
         }
 
@@ -375,10 +382,26 @@ class CP_Ajax {
         $result = CP()->database->book_slot($date, $hour, $user->id);
 
         if ($result['success']) {
-            wp_send_json_success(array(
+            $response = array(
                 'message' => $result['message'],
                 'slot' => array('slot_date' => $date, 'slot_hour' => $hour)
-            ));
+            );
+
+            // Create Google Calendar event if email provided and Google is configured
+            if (!empty($client_email)) {
+                $event_result = $this->create_google_event($date, $hour, $client_email, $user);
+                if ($event_result['success']) {
+                    $response['google_event_id'] = $event_result['event_id'];
+                    if (!empty($event_result['meet_link'])) {
+                        $response['meet_link'] = $event_result['meet_link'];
+                    }
+                } else {
+                    // Do not fail booking if calendar fails; surface message
+                    $response['google_calendar_warning'] = $event_result['message'];
+                }
+            }
+
+            wp_send_json_success($response);
         } else {
             wp_send_json_error(array('message' => $result['message']));
         }
@@ -676,5 +699,120 @@ class CP_Ajax {
         ));
 
         wp_send_json_success(array('appointments' => $appointments));
+    }
+
+    /**
+     * Create Google Calendar event with Meet link for a booking
+     */
+    private function create_google_event($date, $hour, $client_email, $user) {
+        // Ensure Google credentials exist
+        $access_token = $this->get_google_access_token();
+        if (!$access_token) {
+            return array('success' => false, 'message' => 'Google Calendar not configured');
+        }
+
+        // Build start/end times (1 hour duration) using site timezone
+        $timezone = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone(get_option('timezone_string') ?: 'UTC');
+        $start_dt = new DateTime("{$date} {$hour}:00:00", $timezone);
+        $end_dt = clone $start_dt;
+        $end_dt->modify('+1 hour');
+
+        $summary = 'Customer Appointment';
+        $description = 'Booking for ' . trim($user->first_name . ' ' . $user->last_name);
+
+        $payload = array(
+            'summary' => $summary,
+            'description' => $description,
+            'start' => array(
+                'dateTime' => $start_dt->format(DateTime::RFC3339),
+                'timeZone' => $timezone->getName()
+            ),
+            'end' => array(
+                'dateTime' => $end_dt->format(DateTime::RFC3339),
+                'timeZone' => $timezone->getName()
+            ),
+            'attendees' => array(array('email' => $client_email)),
+            'conferenceData' => array(
+                'createRequest' => array(
+                    'requestId' => uniqid('cp_', true)
+                )
+            )
+        );
+
+        $response = wp_remote_post(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all',
+            array(
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Content-Type' => 'application/json'
+                ),
+                'body' => json_encode($payload),
+                'timeout' => 20
+            )
+        );
+
+        if (is_wp_error($response)) {
+            return array('success' => false, 'message' => 'Google Calendar request failed');
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code < 200 || $code >= 300 || !isset($body['id'])) {
+            $msg = isset($body['error']['message']) ? $body['error']['message'] : 'Google Calendar error';
+            return array('success' => false, 'message' => $msg);
+        }
+
+        $meet_link = null;
+        if (!empty($body['hangoutLink'])) {
+            $meet_link = $body['hangoutLink'];
+        } elseif (!empty($body['conferenceData']['entryPoints'])) {
+            foreach ($body['conferenceData']['entryPoints'] as $entry) {
+                if (isset($entry['entryPointType']) && $entry['entryPointType'] === 'video' && !empty($entry['uri'])) {
+                    $meet_link = $entry['uri'];
+                    break;
+                }
+            }
+        }
+
+        return array(
+            'success' => true,
+            'event_id' => $body['id'],
+            'meet_link' => $meet_link
+        );
+    }
+
+    /**
+     * Get Google OAuth access token using stored refresh token
+     */
+    private function get_google_access_token() {
+        $client_id = get_option('cp_google_client_id');
+        $client_secret = get_option('cp_google_client_secret');
+        $refresh_token = get_option('cp_google_refresh_token');
+
+        if (!$client_id || !$client_secret || !$refresh_token) {
+            return null;
+        }
+
+        $token_response = wp_remote_post('https://oauth2.googleapis.com/token', array(
+            'body' => array(
+                'client_id' => $client_id,
+                'client_secret' => $client_secret,
+                'refresh_token' => $refresh_token,
+                'grant_type' => 'refresh_token'
+            )
+        ));
+
+        if (is_wp_error($token_response)) {
+            return null;
+        }
+
+        $token_data = json_decode(wp_remote_retrieve_body($token_response), true);
+
+        if (!isset($token_data['access_token'])) {
+            return null;
+        }
+
+        return $token_data['access_token'];
     }
 }

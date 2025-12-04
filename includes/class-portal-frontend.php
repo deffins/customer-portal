@@ -179,6 +179,20 @@ class CP_Frontend {
                     </div>
                 </div>
             </div>
+
+            <!-- Optional Email Modal -->
+            <div id="email-modal" class="cp-modal" style="display: none;">
+                <div class="cp-modal-overlay"></div>
+                <div class="cp-modal-content">
+                    <h4 style="margin-bottom: 10px;">Add Your Email (Optional)</h4>
+                    <p style="margin-bottom: 10px; color: #555;">Share an email to get a calendar invite with a Meet link, or skip to book without email.</p>
+                    <input id="email-input" type="email" placeholder="your@email.com" style="width: 100%; padding: 10px; margin-bottom: 15px;">
+                    <div class="cp-modal-actions" style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="email-skip" class="button">Skip, Book Without Email</button>
+                        <button id="email-save" class="button button-primary">Save Email &amp; Confirm Booking</button>
+                    </div>
+                </div>
+            </div>
         </div>
         <?php
         return ob_get_clean();
