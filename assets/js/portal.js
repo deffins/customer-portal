@@ -774,47 +774,20 @@
     function init() {
         debugLog('Initializing Customer Portal');
         debugLog('User Agent', navigator.userAgent);
-        
+
         // Check for saved user
+        var savedUser = null;
         var savedUserJson = Storage.get('cp_user');
         if (savedUserJson) {
             try {
-                var savedUser = JSON.parse(savedUserJson);
+                savedUser = JSON.parse(savedUserJson);
                 debugLog('Found saved user', savedUser.first_name);
-                showPortal(savedUser);
-                return;
             } catch(e) {
                 debugLog('Failed to parse saved user', e.message);
                 Storage.remove('cp_user');
             }
         }
-        
-        // Load Telegram widget
-        debugLog('Loading Telegram widget');
-        var telegramContainer = document.getElementById('telegram-login');
-        
-        if (telegramContainer && CONFIG.botUsername) {
-            var script = document.createElement('script');
-            script.async = true;
-            script.src = 'https://telegram.org/js/telegram-widget.js?22';
-            script.setAttribute('data-telegram-login', CONFIG.botUsername);
-            script.setAttribute('data-size', 'large');
-            script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-            script.setAttribute('data-request-access', 'write');
-            
-            script.onload = function() {
-                debugLog('Telegram widget loaded');
-            };
-            script.onerror = function() {
-                debugLog('Failed to load Telegram widget');
-                telegramContainer.innerHTML = '<p style="color:red;">Failed to load Telegram login.</p>';
-            };
-            
-            telegramContainer.appendChild(script);
-        } else {
-            debugLog('Bot username missing or container not found');
-        }
-        
+
         // Logout button
         var logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
@@ -850,6 +823,37 @@
         var modalOverlay = document.querySelector('.cp-modal-overlay');
         if (modalOverlay) {
             modalOverlay.addEventListener('click', hideBookingModal);
+        }
+
+        // Load Telegram widget only when user is not already logged in
+        if (!savedUser) {
+            debugLog('Loading Telegram widget');
+            var telegramContainer = document.getElementById('telegram-login');
+            
+            if (telegramContainer && CONFIG.botUsername) {
+                var script = document.createElement('script');
+                script.async = true;
+                script.src = 'https://telegram.org/js/telegram-widget.js?22';
+                script.setAttribute('data-telegram-login', CONFIG.botUsername);
+                script.setAttribute('data-size', 'large');
+                script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+                script.setAttribute('data-request-access', 'write');
+                
+                script.onload = function() {
+                    debugLog('Telegram widget loaded');
+                };
+                script.onerror = function() {
+                    debugLog('Failed to load Telegram widget');
+                    telegramContainer.innerHTML = '<p style="color:red;">Failed to load Telegram login.</p>';
+                };
+                
+                telegramContainer.appendChild(script);
+            } else {
+                debugLog('Bot username missing or container not found');
+            }
+        } else {
+            // Auto-show portal if user is already authenticated
+            showPortal(savedUser);
         }
     }
     
