@@ -530,6 +530,11 @@
         loadSlotsForCurrentWeek();
     };
 
+    // Expose function to reload appointments list
+    window.cpReloadMyAppointments = function() {
+        loadMyAppointments();
+    };
+
     // Expose function to mark slot as updating (for optimistic updates)
     window.cpMarkSlotUpdating = function(slotKey) {
         pendingUpdates.add(slotKey);

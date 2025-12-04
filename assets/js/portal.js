@@ -705,6 +705,9 @@
             if (window.cpReloadCalendar) {
                 window.cpReloadCalendar();
             }
+            if (window.cpReloadMyAppointments) {
+                window.cpReloadMyAppointments();
+            }
         }, function(error) {
             // Error - reload to revert optimistic update
             if (window.cpReloadCalendar) {
@@ -752,6 +755,9 @@
             // Success - reload to confirm
             if (window.cpReloadCalendar) {
                 window.cpReloadCalendar();
+            }
+            if (window.cpReloadMyAppointments) {
+                window.cpReloadMyAppointments();
             }
         }, function(error) {
             // Error - reload to revert optimistic update
@@ -826,6 +832,11 @@
                 document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
                 this.classList.add('active');
                 document.getElementById(tab + '-tab').classList.add('active');
+
+                // Trigger calendar initialization when calendar tab is clicked
+                if (tab === 'calendar' && window.cpReloadMyAppointments) {
+                    window.cpReloadMyAppointments();
+                }
             });
         });
 
