@@ -47,7 +47,7 @@
 
         const telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
         if (!telegramId) {
-            container.innerHTML = '<p style="color: #999; font-style: italic;">Please log in to see your appointments</p>';
+            container.innerHTML = '<p style="color: #999; font-style: italic;">No upcoming appointments</p>';
             return;
         }
 

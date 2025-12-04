@@ -139,7 +139,7 @@ class CP_Frontend {
                     <div id="my-appointments-section" style="margin-bottom: 30px;">
                         <h4 style="color: #3B4F3D; margin-bottom: 15px;">My Upcoming Appointments</h4>
                         <div id="my-appointments-list">
-                            <p style="color: #999; font-style: italic;">Loading your appointments...</p>
+                            <p style="color: #999; font-style: italic;">Loading...</p>
                         </div>
                     </div>
 
