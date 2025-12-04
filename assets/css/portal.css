@@ -565,3 +565,132 @@
     background: #E87C52 !important;
     cursor: not-allowed;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    #customer-portal {
+        margin: 10px;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    /* Tabs - Make scrollable horizontally */
+    .portal-tabs {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+        flex-wrap: nowrap;
+        gap: 5px;
+        padding-bottom: 5px;
+    }
+
+    .portal-tabs::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+
+    .tab-button {
+        padding: 10px 16px;
+        font-size: 14px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    /* File items - Stack vertically */
+    .file-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .file-name {
+        word-break: break-word;
+    }
+
+    .file-item .button {
+        width: 100%;
+        margin-left: 0;
+        text-align: center;
+    }
+
+    /* Checklist header - Stack on mobile */
+    .checklist-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .checklist-delete-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Supplement items - Adjust spacing */
+    .supplement-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .product-link {
+        width: 100%;
+        text-align: center;
+        margin-left: 0;
+    }
+
+    /* Calendar legend - Better wrapping */
+    .calendar-legend {
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .legend-item {
+        font-size: 12px;
+    }
+
+    /* Modal - Adjust padding */
+    .cp-modal-content {
+        padding: 20px;
+        width: 95%;
+    }
+
+    .cp-modal-content h4 {
+        font-size: 18px;
+    }
+
+    /* Logout button */
+    #logout-btn {
+        width: 100%;
+        margin-top: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    #customer-portal {
+        margin: 5px;
+        padding: 12px;
+    }
+
+    .tab-button {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .tab-content h3 {
+        font-size: 18px;
+    }
+
+    .checklist-card h4 {
+        font-size: 16px;
+    }
+
+    .link-icon {
+        font-size: 24px;
+        width: 30px;
+    }
+
+    .link-title {
+        font-size: 15px;
+    }
+}
