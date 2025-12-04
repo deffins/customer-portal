@@ -660,7 +660,7 @@ class CP_Ajax {
 
         // Get user's booked slots starting from today
         global $wpdb;
-        $table = $wpdb->prefix . 'cp_calendar_slots';
+        $table = $wpdb->prefix . 'booking_calendar_slots';
         $today = date('Y-m-d');
 
         $appointments = $wpdb->get_results($wpdb->prepare(
