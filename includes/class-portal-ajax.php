@@ -37,6 +37,8 @@ class CP_Ajax {
         add_action('wp_ajax_nopriv_cp_cancel_booking', array($this, 'cancel_booking'));
         add_action('wp_ajax_cp_admin_cancel_booking', array($this, 'admin_cancel_booking'));
         add_action('wp_ajax_cp_toggle_slot_availability', array($this, 'toggle_slot_availability'));
+        add_action('wp_ajax_cp_get_my_appointments', array($this, 'get_my_appointments'));
+        add_action('wp_ajax_nopriv_cp_get_my_appointments', array($this, 'get_my_appointments'));
 
         // Surveys
         add_action('wp_ajax_cp_get_assigned_surveys', array($this, 'get_assigned_surveys'));
@@ -635,5 +637,44 @@ class CP_Ajax {
         } else {
             wp_send_json_error(array('message' => 'Failed to save survey result'));
         }
+    }
+
+    /**
+     * Get user's upcoming appointments
+     */
+    public function get_my_appointments() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id'])) {
+            wp_send_json_error(array('message' => 'Telegram ID missing'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        // Get user's booked slots starting from today
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_calendar_slots';
+        $today = date('Y-m-d');
+
+        $appointments = $wpdb->get_results($wpdb->prepare(
+            "SELECT slot_date, slot_hour
+             FROM {$table}
+             WHERE booked_by = %d
+             AND status = 'booked'
+             AND slot_date >= %s
+             ORDER BY slot_date ASC, slot_hour ASC
+             LIMIT 10",
+            $user->id,
+            $today
+        ));
+
+        wp_send_json_success(array('appointments' => $appointments));
     }
 }

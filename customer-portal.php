@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Customer Portal with Telegram Auth
  * Description: Customer file sharing portal with Telegram authentication, Google Drive integration, and appointment booking
- * Version: 2.1.0
+ * Version: 2.1.2
  * Author: Your Name
  * Text Domain: customer-portal
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) exit;
 
 // Plugin constants
-define('CP_VERSION', '2.1.1');
+define('CP_VERSION', '2.1.2');
 define('CP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CP_PLUGIN_URL', plugin_dir_url(__FILE__));
 

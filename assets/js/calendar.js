@@ -31,6 +31,134 @@
 
         renderCalendar();
         loadSlotsForCurrentWeek();
+
+        // Load appointments list for customer view
+        if (CONFIG.isCustomer) {
+            loadMyAppointments();
+        }
+    }
+
+    /**
+     * Load and display user's upcoming appointments
+     */
+    function loadMyAppointments() {
+        const container = document.getElementById('my-appointments-list');
+        if (!container) return;
+
+        const telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
+        if (!telegramId) {
+            container.innerHTML = '<p style="color: #999; font-style: italic;">Please log in to see your appointments</p>';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'cp_get_my_appointments');
+        formData.append('nonce', CONFIG.nonce);
+        formData.append('telegram_id', telegramId);
+
+        fetch(CONFIG.ajaxUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data.appointments) {
+                displayMyAppointments(data.data.appointments);
+            } else {
+                container.innerHTML = '<p style="color: #999; font-style: italic;">No upcoming appointments</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading appointments:', error);
+            container.innerHTML = '<p style="color: #d66b41;">Error loading appointments</p>';
+        });
+    }
+
+    /**
+     * Display appointments list
+     */
+    function displayMyAppointments(appointments) {
+        const container = document.getElementById('my-appointments-list');
+        if (!container) return;
+
+        if (!appointments || appointments.length === 0) {
+            container.innerHTML = '<p style="color: #999; font-style: italic;">No upcoming appointments</p>';
+            return;
+        }
+
+        let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+
+        appointments.forEach(apt => {
+            const date = new Date(apt.slot_date);
+            const dateStr = date.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const timeStr = `${String(apt.slot_hour).padStart(2, '0')}:00`;
+
+            html += `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #F5F5F5; border-radius: 8px; border-left: 4px solid #E87C52;">
+                    <div>
+                        <div style="font-weight: 600; color: #3B4F3D; margin-bottom: 4px;">${dateStr}</div>
+                        <div style="color: #666; font-size: 14px;">Time: ${timeStr}</div>
+                    </div>
+                    <button class="button cancel-apt-btn" data-date="${apt.slot_date}" data-hour="${apt.slot_hour}" style="padding: 6px 14px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">Cancel</button>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+
+        // Add event listeners to cancel buttons
+        const cancelButtons = container.querySelectorAll('.cancel-apt-btn');
+        cancelButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const date = this.getAttribute('data-date');
+                const hour = parseInt(this.getAttribute('data-hour'));
+                handleCancelAppointment(date, hour);
+            });
+        });
+    }
+
+    /**
+     * Handle appointment cancellation from the list
+     */
+    function handleCancelAppointment(date, hour) {
+        if (!confirm('Are you sure you want to cancel this appointment?')) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'cp_cancel_booking');
+        formData.append('nonce', CONFIG.nonce);
+        formData.append('date', date);
+        formData.append('hour', hour);
+
+        if (CONFIG.isCustomer && window.cpGetUserTelegramId) {
+            formData.append('telegram_id', window.cpGetUserTelegramId());
+        }
+
+        fetch(CONFIG.ajaxUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Reload appointments list and calendar
+                loadMyAppointments();
+                loadSlotsForCurrentWeek();
+            } else {
+                alert(data.data && data.data.message ? data.data.message : 'Failed to cancel appointment');
+            }
+        })
+        .catch(error => {
+            console.error('Error cancelling appointment:', error);
+            alert('Error cancelling appointment');
+        });
     }
 
     /**

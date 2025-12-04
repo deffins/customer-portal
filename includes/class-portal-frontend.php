@@ -134,6 +134,15 @@ class CP_Frontend {
 
                 <div id="calendar-tab" class="tab-content">
                     <h3>Book an Appointment</h3>
+
+                    <!-- My Appointments Section -->
+                    <div id="my-appointments-section" style="margin-bottom: 30px;">
+                        <h4 style="color: #3B4F3D; margin-bottom: 15px;">My Upcoming Appointments</h4>
+                        <div id="my-appointments-list">
+                            <p style="color: #999; font-style: italic;">Loading your appointments...</p>
+                        </div>
+                    </div>
+
                     <div class="calendar-legend">
                         <span class="legend-item"><span class="dot dot-free"></span> Available</span>
                         <span class="legend-item"><span class="dot dot-booked-me"></span> Your Booking</span>
