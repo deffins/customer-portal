@@ -59,6 +59,15 @@ class CP_Admin {
 
         add_submenu_page(
             'customer-portal',
+            'Surveys',
+            'Surveys',
+            'manage_options',
+            'customer-portal-surveys',
+            array($this, 'surveys_page')
+        );
+
+        add_submenu_page(
+            'customer-portal',
             'Settings',
             'Settings',
             'manage_options',
@@ -838,6 +847,297 @@ class CP_Admin {
                     </table>
                 <?php endif; ?>
             </div>
+        </div>
+        <?php
+    }
+
+    /**
+     * Surveys page
+     */
+    public function surveys_page() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions.'));
+        }
+
+        $surveys_module = CP()->surveys;
+
+        // Handle actions
+        if (isset($_POST['cp_action']) && isset($_POST['cp_surveys_nonce'])) {
+            if (!wp_verify_nonce($_POST['cp_surveys_nonce'], 'cp_surveys_action')) {
+                wp_die(__('Security check failed.'));
+            }
+
+            if ($_POST['cp_action'] === 'assign_survey' && isset($_POST['user_id']) && isset($_POST['survey_id'])) {
+                $result = CP()->database->assign_survey(
+                    intval($_POST['user_id']),
+                    sanitize_text_field($_POST['survey_id'])
+                );
+                if ($result) {
+                    echo '<div class="notice notice-success"><p>Survey assigned!</p></div>';
+                } else {
+                    echo '<div class="notice notice-warning"><p>Survey already assigned to this user.</p></div>';
+                }
+            }
+
+            if ($_POST['cp_action'] === 'remove_assignment' && isset($_POST['assignment_id'])) {
+                CP()->database->remove_survey_assignment(intval($_POST['assignment_id']));
+                echo '<div class="notice notice-success"><p>Assignment removed!</p></div>';
+            }
+        }
+
+        $view = isset($_GET['view']) ? sanitize_text_field($_GET['view']) : 'assignments';
+
+        ?>
+        <div class="wrap">
+            <h1>Surveys</h1>
+
+            <h2 class="nav-tab-wrapper">
+                <a href="?page=customer-portal-surveys&view=assignments" class="nav-tab <?php echo $view === 'assignments' ? 'nav-tab-active' : ''; ?>">Assignments</a>
+                <a href="?page=customer-portal-surveys&view=results" class="nav-tab <?php echo $view === 'results' ? 'nav-tab-active' : ''; ?>">Results</a>
+            </h2>
+
+            <?php if ($view === 'assignments'): ?>
+                <?php $this->surveys_assignments_view(); ?>
+            <?php elseif ($view === 'results'): ?>
+                <?php $this->surveys_results_view(); ?>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Surveys assignments view
+     */
+    private function surveys_assignments_view() {
+        $surveys_module = CP()->surveys;
+        $available_surveys = $surveys_module->get_available_surveys();
+        $users = CP()->database->get_active_users();
+        $assignments = CP()->database->get_all_survey_assignments();
+
+        ?>
+        <div style="background: white; padding: 20px; margin: 20px 0; border-radius: 5px;">
+            <h2>Assign Survey to Client</h2>
+            <form method="post">
+                <?php wp_nonce_field('cp_surveys_action', 'cp_surveys_nonce'); ?>
+                <input type="hidden" name="cp_action" value="assign_survey">
+                <table class="form-table">
+                    <tr>
+                        <th><label>Client</label></th>
+                        <td>
+                            <select name="user_id" required style="min-width: 250px;">
+                                <option value="">Select client...</option>
+                                <?php foreach ($users as $user): ?>
+                                    <option value="<?php echo esc_attr($user->id); ?>">
+                                        <?php echo esc_html($user->first_name . ' ' . $user->last_name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label>Survey</label></th>
+                        <td>
+                            <select name="survey_id" required style="min-width: 250px;">
+                                <option value="">Select survey...</option>
+                                <?php foreach ($available_surveys as $survey): ?>
+                                    <option value="<?php echo esc_attr($survey['id']); ?>">
+                                        <?php echo esc_html($survey['title']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+                <p class="submit"><input type="submit" class="button button-primary" value="Assign Survey"></p>
+            </form>
+        </div>
+
+        <h2>Current Assignments</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Survey</th>
+                    <th>Status</th>
+                    <th>Assigned</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($assignments)): ?>
+                    <tr><td colspan="5">No assignments yet.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($assignments as $assignment): ?>
+                    <?php
+                        $survey_info = isset($available_surveys[$assignment->survey_id]) ? $available_surveys[$assignment->survey_id] : null;
+                        $survey_title = $survey_info ? $survey_info['title'] : $assignment->survey_id;
+                    ?>
+                    <tr>
+                        <td><?php echo esc_html(trim($assignment->first_name . ' ' . $assignment->last_name)); ?></td>
+                        <td><?php echo esc_html($survey_title); ?></td>
+                        <td><?php echo esc_html(ucfirst($assignment->status)); ?></td>
+                        <td><?php echo esc_html($assignment->created_at); ?></td>
+                        <td>
+                            <form method="post" style="display:inline;">
+                                <?php wp_nonce_field('cp_surveys_action', 'cp_surveys_nonce'); ?>
+                                <input type="hidden" name="cp_action" value="remove_assignment">
+                                <input type="hidden" name="assignment_id" value="<?php echo esc_attr($assignment->id); ?>">
+                                <button type="submit" class="button button-small" onclick="return confirm('Remove this assignment?');">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        <?php
+    }
+
+    /**
+     * Surveys results view
+     */
+    private function surveys_results_view() {
+        $surveys_module = CP()->surveys;
+        $available_surveys = $surveys_module->get_available_surveys();
+
+        // Handle view details
+        if (isset($_GET['result_id'])) {
+            $this->survey_result_detail(intval($_GET['result_id']));
+            return;
+        }
+
+        $results = CP()->database->get_all_survey_results();
+
+        ?>
+        <h2>Survey Results</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th width="50">ID</th>
+                    <th>Client</th>
+                    <th>Survey</th>
+                    <th width="100">Total Score</th>
+                    <th width="150">Submitted</th>
+                    <th width="100">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($results)): ?>
+                    <tr><td colspan="6">No results yet.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($results as $result): ?>
+                    <?php
+                        $survey_info = isset($available_surveys[$result->survey_id]) ? $available_surveys[$result->survey_id] : null;
+                        $survey_title = $survey_info ? $survey_info['title'] : $result->survey_id;
+                        $interpretation = $surveys_module->get_score_interpretation($result->total_score);
+                    ?>
+                    <tr>
+                        <td><?php echo esc_html($result->id); ?></td>
+                        <td><?php echo esc_html(trim($result->first_name . ' ' . $result->last_name)); ?></td>
+                        <td><?php echo esc_html($survey_title); ?></td>
+                        <td>
+                            <strong><?php echo esc_html($result->total_score); ?></strong>
+                            <br>
+                            <span style="font-size: 11px; color: #666;"><?php echo esc_html($interpretation['label']); ?></span>
+                        </td>
+                        <td><?php echo esc_html(date('Y-m-d H:i', strtotime($result->created_at))); ?></td>
+                        <td>
+                            <a href="?page=customer-portal-surveys&view=results&result_id=<?php echo $result->id; ?>" class="button button-small">View Details</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+        <?php
+    }
+
+    /**
+     * Survey result detail view
+     */
+    private function survey_result_detail($result_id) {
+        $surveys_module = CP()->surveys;
+        $result = CP()->database->get_survey_result($result_id);
+
+        if (!$result) {
+            echo '<p>Result not found.</p>';
+            return;
+        }
+
+        $survey = $surveys_module->get_survey_definition($result->survey_id);
+        $answers = json_decode($result->answers_json, true);
+        $dimension_scores = json_decode($result->dimension_scores_json, true);
+        $interpretation = $surveys_module->get_score_interpretation($result->total_score);
+
+        ?>
+        <p><a href="?page=customer-portal-surveys&view=results">&larr; Back to Results</a></p>
+
+        <div style="background: white; padding: 20px; margin: 20px 0; border-radius: 5px;">
+            <h2><?php echo esc_html($survey['title']); ?></h2>
+            <p>
+                <strong>Client:</strong> <?php echo esc_html(trim($result->first_name . ' ' . $result->last_name)); ?><br>
+                <strong>Submitted:</strong> <?php echo esc_html(date('F j, Y g:i A', strtotime($result->created_at))); ?>
+            </p>
+
+            <h3>Overall Score: <?php echo esc_html($result->total_score); ?> - <?php echo esc_html($interpretation['label']); ?></h3>
+            <p style="color: #666;"><?php echo esc_html($interpretation['description']); ?></p>
+
+            <h3>Dimension Scores</h3>
+            <table class="widefat" style="margin-bottom: 20px;">
+                <thead>
+                    <tr>
+                        <th>Dimension</th>
+                        <th width="100">Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($survey['dimensions'] as $dim_key => $dim_label): ?>
+                    <tr>
+                        <td><?php echo esc_html($dim_label); ?></td>
+                        <td><strong><?php echo isset($dimension_scores[$dim_key]) ? esc_html($dimension_scores[$dim_key]) : 0; ?></strong></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+
+            <h3>Answers</h3>
+            <table class="widefat">
+                <thead>
+                    <tr>
+                        <th width="40">#</th>
+                        <th>Question</th>
+                        <th width="250">Answer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php $q_num = 1; ?>
+                    <?php foreach ($survey['questions'] as $question): ?>
+                    <?php
+                        $q_id = $question['id'];
+                        $answer_value = isset($answers[$q_id]) ? $answers[$q_id] : '';
+                        $answer_display = '';
+
+                        if ($question['type'] === 'slider') {
+                            $answer_display = $answer_value . ' / ' . $question['max'];
+                        } elseif ($question['type'] === 'single_choice') {
+                            foreach ($question['options'] as $option) {
+                                if ($option['value'] === $answer_value) {
+                                    $answer_display = $option['label'];
+                                    break;
+                                }
+                            }
+                        } elseif ($question['type'] === 'text') {
+                            $answer_display = $answer_value;
+                        }
+                    ?>
+                    <tr>
+                        <td><?php echo $q_num++; ?></td>
+                        <td><?php echo esc_html($question['label']); ?></td>
+                        <td><?php echo esc_html($answer_display); ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
         <?php
     }

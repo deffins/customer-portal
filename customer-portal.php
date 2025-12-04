@@ -16,6 +16,7 @@ define('CP_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Include required files
 require_once CP_PLUGIN_DIR . 'includes/class-portal-database.php';
+require_once CP_PLUGIN_DIR . 'includes/class-portal-surveys.php';
 require_once CP_PLUGIN_DIR . 'includes/class-portal-ajax.php';
 require_once CP_PLUGIN_DIR . 'includes/class-portal-admin.php';
 require_once CP_PLUGIN_DIR . 'includes/class-portal-frontend.php';
@@ -26,8 +27,9 @@ require_once CP_PLUGIN_DIR . 'includes/class-portal-frontend.php';
 class CustomerPortal {
     
     private static $instance = null;
-    
+
     public $database;
+    public $surveys;
     public $ajax;
     public $admin;
     public $frontend;
@@ -46,6 +48,7 @@ class CustomerPortal {
     
     private function init_classes() {
         $this->database = new CP_Database();
+        $this->surveys = new CP_Surveys();
         $this->ajax = new CP_Ajax();
         $this->admin = new CP_Admin();
         $this->frontend = new CP_Frontend();

@@ -278,6 +278,7 @@
         loadFiles(user.id);
         loadChecklists(user.id);
         loadLinks(user.id);
+        loadSurveys(user.id);
         // Calendar will auto-load via calendar.js init when tab is rendered
     }
     
@@ -311,7 +312,7 @@
     
     function loadLinks(telegramId) {
         debugLog('Loading links for', telegramId);
-        
+
         ajaxPost({
             action: 'get_customer_links',
             telegram_id: telegramId,
@@ -320,6 +321,23 @@
             displayLinks(response.data.links);
         }, function(error) {
             document.getElementById('links-container').innerHTML = '<p>Failed to load links: ' + escapeHtml(error) + '</p>';
+        });
+    }
+
+    function loadSurveys(telegramId) {
+        debugLog('Loading surveys for', telegramId);
+
+        ajaxPost({
+            action: 'cp_get_assigned_surveys',
+            telegram_id: telegramId,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            // The surveys wizard will handle display
+            if (window.cpDisplaySurveys) {
+                window.cpDisplaySurveys(response.data.surveys);
+            }
+        }, function(error) {
+            document.getElementById('surveys-container').innerHTML = '<p>Failed to load surveys: ' + escapeHtml(error) + '</p>';
         });
     }
     

@@ -37,6 +37,14 @@ class CP_Ajax {
         add_action('wp_ajax_nopriv_cp_cancel_booking', array($this, 'cancel_booking'));
         add_action('wp_ajax_cp_admin_cancel_booking', array($this, 'admin_cancel_booking'));
         add_action('wp_ajax_cp_toggle_slot_availability', array($this, 'toggle_slot_availability'));
+
+        // Surveys
+        add_action('wp_ajax_cp_get_assigned_surveys', array($this, 'get_assigned_surveys'));
+        add_action('wp_ajax_nopriv_cp_get_assigned_surveys', array($this, 'get_assigned_surveys'));
+        add_action('wp_ajax_cp_get_survey_definition', array($this, 'get_survey_definition'));
+        add_action('wp_ajax_nopriv_cp_get_survey_definition', array($this, 'get_survey_definition'));
+        add_action('wp_ajax_cp_submit_survey', array($this, 'submit_survey'));
+        add_action('wp_ajax_nopriv_cp_submit_survey', array($this, 'submit_survey'));
     }
     
     /**
@@ -491,6 +499,141 @@ class CP_Ajax {
             ));
         } else {
             wp_send_json_error(array('message' => $result['message']));
+        }
+    }
+
+    /**
+     * SURVEY AJAX HANDLERS
+     */
+
+    /**
+     * Get assigned surveys for a user
+     */
+    public function get_assigned_surveys() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id'])) {
+            wp_send_json_error(array('message' => 'Telegram ID missing'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        $assignments = CP()->database->get_user_assigned_surveys($user->id);
+        $surveys_module = CP()->surveys;
+        $available_surveys = $surveys_module->get_available_surveys();
+
+        // Format assignments for frontend
+        $formatted_assignments = array();
+        foreach ($assignments as $assignment) {
+            $survey_info = isset($available_surveys[$assignment->survey_id]) ? $available_surveys[$assignment->survey_id] : null;
+
+            $status = 'not_started';
+            if ($assignment->completion_count > 0) {
+                $status = 'completed';
+            }
+
+            $formatted_assignments[] = array(
+                'assignment_id' => $assignment->id,
+                'survey_id' => $assignment->survey_id,
+                'title' => $survey_info ? $survey_info['title'] : $assignment->survey_id,
+                'description' => $survey_info ? $survey_info['description'] : '',
+                'status' => $status,
+                'completion_count' => intval($assignment->completion_count),
+                'last_completed_at' => $assignment->last_completed_at
+            );
+        }
+
+        wp_send_json_success(array('surveys' => $formatted_assignments));
+    }
+
+    /**
+     * Get survey definition
+     */
+    public function get_survey_definition() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id'])) {
+            wp_send_json_error(array('message' => 'Survey ID missing'));
+            return;
+        }
+
+        $survey_id = sanitize_text_field($_POST['survey_id']);
+        $surveys_module = CP()->surveys;
+        $survey = $surveys_module->get_survey_definition($survey_id);
+
+        if (!$survey) {
+            wp_send_json_error(array('message' => 'Survey not found'));
+            return;
+        }
+
+        wp_send_json_success(array('survey' => $survey));
+    }
+
+    /**
+     * Submit survey answers
+     */
+    public function submit_survey() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['telegram_id']) || !isset($_POST['survey_id']) || !isset($_POST['answers'])) {
+            wp_send_json_error(array('message' => 'Missing parameters'));
+            return;
+        }
+
+        $telegram_id = intval($_POST['telegram_id']);
+        $survey_id = sanitize_text_field($_POST['survey_id']);
+        $answers = $_POST['answers']; // Already an array from JSON
+
+        // Get user
+        $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found'));
+            return;
+        }
+
+        // Verify user has this survey assigned
+        $assignments = CP()->database->get_user_assigned_surveys($user->id);
+        $has_assignment = false;
+        foreach ($assignments as $assignment) {
+            if ($assignment->survey_id === $survey_id) {
+                $has_assignment = true;
+                break;
+            }
+        }
+
+        if (!$has_assignment) {
+            wp_send_json_error(array('message' => 'Survey not assigned to this user'));
+            return;
+        }
+
+        // Calculate scores
+        $surveys_module = CP()->surveys;
+        $scores = $surveys_module->calculate_scores($survey_id, $answers);
+
+        // Save result
+        $result_id = CP()->database->save_survey_result(
+            $user->id,
+            $survey_id,
+            $answers,
+            $scores['total_score'],
+            $scores['dimension_scores']
+        );
+
+        if ($result_id) {
+            wp_send_json_success(array(
+                'message' => 'Survey submitted successfully',
+                'result_id' => $result_id,
+                'total_score' => $scores['total_score']
+            ));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to save survey result'));
         }
     }
 }

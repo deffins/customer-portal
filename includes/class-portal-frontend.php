@@ -48,6 +48,21 @@ class CP_Frontend {
             true
         );
 
+        wp_enqueue_style(
+            'cp-surveys',
+            CP_PLUGIN_URL . 'assets/css/surveys.css',
+            array(),
+            CP_VERSION
+        );
+
+        wp_enqueue_script(
+            'cp-surveys',
+            CP_PLUGIN_URL . 'assets/js/surveys.js',
+            array(),
+            CP_VERSION,
+            true
+        );
+
         // Pass data to JS
         wp_localize_script('cp-portal', 'cpConfig', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -93,6 +108,7 @@ class CP_Frontend {
                     <button class="tab-button" data-tab="checklists">Checklists</button>
                     <button class="tab-button" data-tab="links">Links</button>
                     <button class="tab-button" data-tab="calendar">Calendar</button>
+                    <button class="tab-button" data-tab="surveys">Surveys</button>
                 </div>
 
                 <div id="files-tab" class="tab-content active">
@@ -126,6 +142,16 @@ class CP_Frontend {
                     </div>
                     <div id="bc-calendar-container">
                         <p>Loading calendar...</p>
+                    </div>
+                </div>
+
+                <div id="surveys-tab" class="tab-content">
+                    <h3>Surveys</h3>
+                    <div id="surveys-container">
+                        <p>Loading surveys...</p>
+                    </div>
+                    <div id="survey-wizard" style="display:none;">
+                        <!-- Survey wizard content will be inserted here -->
                     </div>
                 </div>
 

@@ -99,6 +99,39 @@ class CP_Database {
         // Run calendar schema upgrade (for existing installations)
         $this->upgrade_calendar_schema();
 
+        // Survey assignments table
+        $survey_assignments_table = $wpdb->prefix . 'cp_survey_assignments';
+        $sql_survey_assignments = "CREATE TABLE {$survey_assignments_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            user_id mediumint(9) NOT NULL,
+            survey_id varchar(100) NOT NULL,
+            status varchar(50) DEFAULT 'assigned',
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY user_id (user_id),
+            KEY survey_id (survey_id),
+            UNIQUE KEY user_survey (user_id, survey_id)
+        ) $charset_collate;";
+        dbDelta($sql_survey_assignments);
+
+        // Survey results table
+        $survey_results_table = $wpdb->prefix . 'cp_survey_results';
+        $sql_survey_results = "CREATE TABLE {$survey_results_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            user_id mediumint(9) NOT NULL,
+            survey_id varchar(100) NOT NULL,
+            answers_json longtext,
+            total_score int DEFAULT 0,
+            dimension_scores_json text,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY user_id (user_id),
+            KEY survey_id (survey_id)
+        ) $charset_collate;";
+        dbDelta($sql_survey_results);
+
         // Default options
         add_option('cp_telegram_bot_token', '');
         add_option('cp_telegram_bot_username', '');
@@ -557,6 +590,173 @@ class CP_Database {
             return $wpdb->get_results($wpdb->prepare($sql, $params));
         } else {
             return $wpdb->get_results($sql);
+        }
+    }
+
+    /**
+     * SURVEY METHODS
+     */
+
+    /**
+     * Assign a survey to a user
+     */
+    public function assign_survey($user_id, $survey_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_assignments';
+
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE user_id = %d AND survey_id = %s",
+            $user_id,
+            $survey_id
+        ));
+
+        if ($existing) {
+            return false; // Already assigned
+        }
+
+        $result = $wpdb->insert($table, array(
+            'user_id' => $user_id,
+            'survey_id' => $survey_id,
+            'status' => 'assigned'
+        ));
+
+        return $result !== false;
+    }
+
+    /**
+     * Remove survey assignment
+     */
+    public function remove_survey_assignment($assignment_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_assignments';
+
+        return $wpdb->delete($table, array('id' => $assignment_id));
+    }
+
+    /**
+     * Get user's assigned surveys
+     */
+    public function get_user_assigned_surveys($user_id) {
+        global $wpdb;
+        $assignments_table = $wpdb->prefix . 'cp_survey_assignments';
+        $results_table = $wpdb->prefix . 'cp_survey_results';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT a.*,
+                    (SELECT COUNT(*) FROM {$results_table} r WHERE r.user_id = a.user_id AND r.survey_id = a.survey_id) as completion_count,
+                    (SELECT MAX(created_at) FROM {$results_table} r WHERE r.user_id = a.user_id AND r.survey_id = a.survey_id) as last_completed_at
+             FROM {$assignments_table} a
+             WHERE a.user_id = %d
+             ORDER BY a.created_at DESC",
+            $user_id
+        ));
+    }
+
+    /**
+     * Get all survey assignments (admin)
+     */
+    public function get_all_survey_assignments() {
+        global $wpdb;
+        $assignments_table = $wpdb->prefix . 'cp_survey_assignments';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_results(
+            "SELECT a.*, u.first_name, u.last_name, u.telegram_id
+             FROM {$assignments_table} a
+             LEFT JOIN {$users_table} u ON a.user_id = u.id
+             ORDER BY a.created_at DESC"
+        );
+    }
+
+    /**
+     * Save survey result
+     */
+    public function save_survey_result($user_id, $survey_id, $answers, $total_score, $dimension_scores) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_results';
+
+        $result = $wpdb->insert($table, array(
+            'user_id' => $user_id,
+            'survey_id' => $survey_id,
+            'answers_json' => json_encode($answers),
+            'total_score' => $total_score,
+            'dimension_scores_json' => json_encode($dimension_scores)
+        ));
+
+        return $result !== false ? $wpdb->insert_id : false;
+    }
+
+    /**
+     * Get all survey results (admin)
+     */
+    public function get_all_survey_results($filters = array()) {
+        global $wpdb;
+        $results_table = $wpdb->prefix . 'cp_survey_results';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        $where = array('1=1');
+        $params = array();
+
+        if (!empty($filters['user_id'])) {
+            $where[] = "r.user_id = %d";
+            $params[] = $filters['user_id'];
+        }
+
+        if (!empty($filters['survey_id'])) {
+            $where[] = "r.survey_id = %s";
+            $params[] = $filters['survey_id'];
+        }
+
+        $where_clause = implode(' AND ', $where);
+
+        $sql = "SELECT r.*, u.first_name, u.last_name, u.telegram_id
+                FROM {$results_table} r
+                LEFT JOIN {$users_table} u ON r.user_id = u.id
+                WHERE {$where_clause}
+                ORDER BY r.created_at DESC";
+
+        if (!empty($params)) {
+            return $wpdb->get_results($wpdb->prepare($sql, $params));
+        } else {
+            return $wpdb->get_results($sql);
+        }
+    }
+
+    /**
+     * Get single survey result by ID
+     */
+    public function get_survey_result($result_id) {
+        global $wpdb;
+        $results_table = $wpdb->prefix . 'cp_survey_results';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT r.*, u.first_name, u.last_name, u.telegram_id
+             FROM {$results_table} r
+             LEFT JOIN {$users_table} u ON r.user_id = u.id
+             WHERE r.id = %d",
+            $result_id
+        ));
+    }
+
+    /**
+     * Get user's survey history
+     */
+    public function get_user_survey_results($user_id, $survey_id = null) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_results';
+
+        if ($survey_id) {
+            return $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$table} WHERE user_id = %d AND survey_id = %s ORDER BY created_at DESC",
+                $user_id,
+                $survey_id
+            ));
+        } else {
+            return $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$table} WHERE user_id = %d ORDER BY created_at DESC",
+                $user_id
+            ));
         }
     }
 }
