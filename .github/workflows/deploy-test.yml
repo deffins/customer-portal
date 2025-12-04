@@ -20,7 +20,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /home/u226352978/domains/fons.lv/public_html/wp-content/plugins/customer-portal/
+          server-dir: /domains/fons.lv/public_html/wp-content/plugins/customer-portal/
           exclude: |
             **/.git*
             **/.git*/**
