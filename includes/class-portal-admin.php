@@ -1174,7 +1174,7 @@ class CP_Admin {
      * Supplement Surveys Management View
      */
     private function supplement_surveys_view() {
-        // Handle create/edit/delete actions
+        // Handle create/edit/delete/assign actions
         if (isset($_POST['cp_action']) && isset($_POST['cp_supplement_nonce'])) {
             if (!wp_verify_nonce($_POST['cp_supplement_nonce'], 'cp_supplement_action')) {
                 wp_die(__('Security check failed.'));
@@ -1201,11 +1201,34 @@ class CP_Admin {
                 CP()->database->delete_supplement_survey(intval($_POST['survey_id']));
                 echo '<div class="notice notice-success"><p>Survey deleted!</p></div>';
             }
+
+            if ($_POST['cp_action'] === 'assign_survey' && isset($_POST['survey_id']) && isset($_POST['user_id'])) {
+                $survey_id = intval($_POST['survey_id']);
+                $user_id = intval($_POST['user_id']);
+
+                // Use format "supplement_{id}" for survey_id in assignments table
+                $assignment_survey_id = 'supplement_' . $survey_id;
+
+                $result = CP()->database->assign_survey($user_id, $assignment_survey_id);
+
+                if ($result) {
+                    echo '<div class="notice notice-success"><p>Survey assigned to user!</p></div>';
+                } else {
+                    echo '<div class="notice notice-warning"><p>Survey already assigned to this user.</p></div>';
+                }
+            }
         }
 
         $edit_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
+        $assign_id = isset($_GET['assign']) ? intval($_GET['assign']) : 0;
         $edit_survey = null;
         $supplements_text = '';
+
+        // If assigning, show assignment UI
+        if ($assign_id) {
+            $this->show_supplement_assignment_ui($assign_id);
+            return;
+        }
 
         if ($edit_id) {
             $edit_survey = CP()->database->get_supplement_survey($edit_id);
@@ -1285,6 +1308,8 @@ class CP_Admin {
                                 <td>
                                     <a href="?page=customer-portal-surveys&view=supplement_surveys&edit=<?php echo $survey->id; ?>"
                                        class="button button-small">Edit</a>
+                                    <a href="?page=customer-portal-surveys&view=supplement_surveys&assign=<?php echo $survey->id; ?>"
+                                       class="button button-small button-primary">Assign to Users</a>
                                     <form method="post" style="display: inline;">
                                         <?php wp_nonce_field('cp_supplement_action', 'cp_supplement_nonce'); ?>
                                         <input type="hidden" name="cp_action" value="delete_survey">
@@ -1438,5 +1463,107 @@ class CP_Admin {
 
         echo str_repeat("=", 60) . "\n";
         echo "Exported: " . date('Y-m-d H:i:s') . "\n";
+    }
+
+    /**
+     * Show supplement survey assignment UI
+     */
+    private function show_supplement_assignment_ui($survey_id) {
+        $survey = CP()->database->get_supplement_survey($survey_id);
+
+        if (!$survey) {
+            echo '<p>Survey not found.</p>';
+            return;
+        }
+
+        $users = CP()->database->get_active_users();
+        $assignment_survey_id = 'supplement_' . $survey_id;
+
+        // Get existing assignments for this survey
+        $all_assignments = CP()->database->get_all_survey_assignments();
+        $assigned_user_ids = array();
+        foreach ($all_assignments as $assignment) {
+            if ($assignment->survey_id === $assignment_survey_id) {
+                $assigned_user_ids[] = $assignment->user_id;
+            }
+        }
+
+        ?>
+        <div class="wrap">
+            <h2>Assign Survey: <?php echo esc_html($survey->title); ?></h2>
+            <p><a href="?page=customer-portal-surveys&view=supplement_surveys" class="button">← Back to Surveys</a></p>
+
+            <h3>Assign to Users</h3>
+
+            <form method="post" style="max-width: 600px;">
+                <?php wp_nonce_field('cp_supplement_action', 'cp_supplement_nonce'); ?>
+                <input type="hidden" name="cp_action" value="assign_survey">
+                <input type="hidden" name="survey_id" value="<?php echo $survey_id; ?>">
+
+                <table class="form-table">
+                    <tr>
+                        <th><label for="user_id">Select User</label></th>
+                        <td>
+                            <select name="user_id" id="user_id" required>
+                                <option value="">-- Select a user --</option>
+                                <?php foreach ($users as $user): ?>
+                                    <?php
+                                    $already_assigned = in_array($user->id, $assigned_user_ids);
+                                    $disabled = $already_assigned ? 'disabled' : '';
+                                    $suffix = $already_assigned ? ' (already assigned)' : '';
+                                    ?>
+                                    <option value="<?php echo $user->id; ?>" <?php echo $disabled; ?>>
+                                        <?php echo esc_html(trim($user->first_name . ' ' . $user->last_name)) . $suffix; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+
+                <p class="submit">
+                    <button type="submit" class="button button-primary">Assign Survey</button>
+                </p>
+            </form>
+
+            <hr style="margin: 40px 0;">
+
+            <h3>Currently Assigned Users</h3>
+            <?php if (empty($assigned_user_ids)): ?>
+                <p>No users assigned yet.</p>
+            <?php else: ?>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th>User Name</th>
+                            <th>Assigned Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($all_assignments as $assignment): ?>
+                            <?php if ($assignment->survey_id === $assignment_survey_id): ?>
+                                <tr>
+                                    <td><?php echo esc_html(trim($assignment->first_name . ' ' . $assignment->last_name)); ?></td>
+                                    <td><?php echo date('F j, Y', strtotime($assignment->created_at)); ?></td>
+                                    <td>
+                                        <form method="post" style="display: inline;">
+                                            <?php wp_nonce_field('cp_surveys_action', 'cp_surveys_nonce'); ?>
+                                            <input type="hidden" name="cp_action" value="remove_assignment">
+                                            <input type="hidden" name="assignment_id" value="<?php echo $assignment->id; ?>">
+                                            <button type="submit" class="button button-small"
+                                                    onclick="return confirm('Remove this assignment?');">
+                                                Remove
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 }
