@@ -342,6 +342,11 @@
         }, function(error) {
             document.getElementById('surveys-container').innerHTML = '<p>Failed to load surveys: ' + escapeHtml(error) + '</p>';
         });
+
+        // Also initialize supplement feedback if available
+        if (window.cpInitSupplementFeedback && currentUser) {
+            window.cpInitSupplementFeedback(currentUser);
+        }
     }
     
     // ========================================

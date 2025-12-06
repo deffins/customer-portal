@@ -49,6 +49,14 @@ class CP_Ajax {
         add_action('wp_ajax_nopriv_cp_get_survey_definition', array($this, 'get_survey_definition'));
         add_action('wp_ajax_cp_submit_survey', array($this, 'submit_survey'));
         add_action('wp_ajax_nopriv_cp_submit_survey', array($this, 'submit_survey'));
+
+        // Supplement Feedback
+        add_action('wp_ajax_cp_get_supplement_survey', array($this, 'get_supplement_survey'));
+        add_action('wp_ajax_nopriv_cp_get_supplement_survey', array($this, 'get_supplement_survey'));
+        add_action('wp_ajax_cp_save_supplement_comment', array($this, 'save_supplement_comment'));
+        add_action('wp_ajax_nopriv_cp_save_supplement_comment', array($this, 'save_supplement_comment'));
+        add_action('wp_ajax_cp_get_user_supplement_comments', array($this, 'get_user_supplement_comments'));
+        add_action('wp_ajax_nopriv_cp_get_user_supplement_comments', array($this, 'get_user_supplement_comments'));
     }
     
     /**
@@ -853,6 +861,86 @@ class CP_Ajax {
                 'username' => $user->username,
                 'email' => $user->email
             )
+        ));
+    }
+
+    /**
+     * SUPPLEMENT FEEDBACK AJAX HANDLERS
+     */
+
+    /**
+     * Get supplement survey data
+     */
+    public function get_supplement_survey() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id'])) {
+            wp_send_json_error(array('message' => 'Survey ID missing'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+        $survey = CP()->database->get_supplement_survey($survey_id);
+
+        if (!$survey) {
+            wp_send_json_error(array('message' => 'Survey not found'));
+            return;
+        }
+
+        wp_send_json_success(array(
+            'survey' => $survey
+        ));
+    }
+
+    /**
+     * Save supplement comment
+     */
+    public function save_supplement_comment() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id']) || !isset($_POST['supplement_id']) || !isset($_POST['user_id'])) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+        $supplement_id = intval($_POST['supplement_id']);
+        $user_id = intval($_POST['user_id']);
+        $comment_text = sanitize_textarea_field($_POST['comment_text']);
+
+        $result = CP()->database->save_supplement_comment($survey_id, $supplement_id, $user_id, $comment_text);
+
+        if ($result !== false) {
+            wp_send_json_success(array('message' => 'Comment saved!'));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to save comment'));
+        }
+    }
+
+    /**
+     * Get user's supplement comments
+     */
+    public function get_user_supplement_comments() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id']) || !isset($_POST['user_id'])) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+        $user_id = intval($_POST['user_id']);
+
+        $comments = CP()->database->get_user_supplement_comments($user_id, $survey_id);
+
+        // Convert to associative array by supplement_id for easy lookup
+        $comments_map = array();
+        foreach ($comments as $comment) {
+            $comments_map[$comment->supplement_id] = $comment->comment_text;
+        }
+
+        wp_send_json_success(array(
+            'comments' => $comments_map
         ));
     }
 }

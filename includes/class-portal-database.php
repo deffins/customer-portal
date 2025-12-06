@@ -139,6 +139,49 @@ class CP_Database {
         ) $charset_collate;";
         dbDelta($sql_survey_results);
 
+        // Surveys table (for supplement_feedback and other dynamic surveys)
+        $surveys_table = $wpdb->prefix . 'cp_surveys';
+        $sql_surveys = "CREATE TABLE {$surveys_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            title varchar(255) NOT NULL,
+            type varchar(50) NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY type (type)
+        ) $charset_collate;";
+        dbDelta($sql_surveys);
+
+        // Survey supplements table
+        $survey_supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+        $sql_survey_supplements = "CREATE TABLE {$survey_supplements_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            survey_id mediumint(9) NOT NULL,
+            name varchar(255) NOT NULL,
+            sort_order int DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY survey_id (survey_id)
+        ) $charset_collate;";
+        dbDelta($sql_survey_supplements);
+
+        // Survey supplement comments table
+        $survey_supplement_comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
+        $sql_survey_supplement_comments = "CREATE TABLE {$survey_supplement_comments_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            survey_id mediumint(9) NOT NULL,
+            supplement_id mediumint(9) NOT NULL,
+            user_id mediumint(9) NOT NULL,
+            comment_text text,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY survey_id (survey_id),
+            KEY supplement_id (supplement_id),
+            KEY user_id (user_id),
+            UNIQUE KEY user_supplement (user_id, supplement_id)
+        ) $charset_collate;";
+        dbDelta($sql_survey_supplement_comments);
+
         // Default options
         add_option('cp_telegram_bot_token', '');
         add_option('cp_telegram_bot_username', '');
@@ -799,5 +842,194 @@ class CP_Database {
         if (!$column) {
             $wpdb->query("ALTER TABLE {$table} ADD COLUMN email varchar(255) NULL AFTER username");
         }
+    }
+
+    /**
+     * SUPPLEMENT FEEDBACK SURVEY METHODS
+     */
+
+    /**
+     * Create or update a supplement feedback survey
+     */
+    public function save_supplement_survey($survey_id, $title, $supplements) {
+        global $wpdb;
+        $surveys_table = $wpdb->prefix . 'cp_surveys';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+
+        if ($survey_id) {
+            // Update existing survey
+            $wpdb->update(
+                $surveys_table,
+                array('title' => $title),
+                array('id' => $survey_id, 'type' => 'supplement_feedback')
+            );
+        } else {
+            // Create new survey
+            $wpdb->insert($surveys_table, array(
+                'title' => $title,
+                'type' => 'supplement_feedback'
+            ));
+            $survey_id = $wpdb->insert_id;
+        }
+
+        // Delete existing supplements for this survey
+        $wpdb->delete($supplements_table, array('survey_id' => $survey_id));
+
+        // Insert new supplements
+        $sort_order = 0;
+        foreach ($supplements as $supplement_name) {
+            $supplement_name = trim($supplement_name);
+            if (!empty($supplement_name)) {
+                $wpdb->insert($supplements_table, array(
+                    'survey_id' => $survey_id,
+                    'name' => $supplement_name,
+                    'sort_order' => $sort_order++
+                ));
+            }
+        }
+
+        return $survey_id;
+    }
+
+    /**
+     * Get all supplement feedback surveys
+     */
+    public function get_supplement_surveys() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_surveys';
+
+        return $wpdb->get_results(
+            "SELECT * FROM {$table} WHERE type = 'supplement_feedback' ORDER BY created_at DESC"
+        );
+    }
+
+    /**
+     * Get a single supplement survey with its supplements
+     */
+    public function get_supplement_survey($survey_id) {
+        global $wpdb;
+        $surveys_table = $wpdb->prefix . 'cp_surveys';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+
+        $survey = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$surveys_table} WHERE id = %d AND type = 'supplement_feedback'",
+            $survey_id
+        ));
+
+        if ($survey) {
+            $survey->supplements = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$supplements_table} WHERE survey_id = %d ORDER BY sort_order ASC",
+                $survey_id
+            ));
+        }
+
+        return $survey;
+    }
+
+    /**
+     * Delete a supplement survey
+     */
+    public function delete_supplement_survey($survey_id) {
+        global $wpdb;
+        $surveys_table = $wpdb->prefix . 'cp_surveys';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+        $comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
+
+        // Delete comments
+        $wpdb->delete($comments_table, array('survey_id' => $survey_id));
+
+        // Delete supplements
+        $wpdb->delete($supplements_table, array('survey_id' => $survey_id));
+
+        // Delete survey
+        return $wpdb->delete($surveys_table, array('id' => $survey_id, 'type' => 'supplement_feedback'));
+    }
+
+    /**
+     * Save or update a supplement comment
+     */
+    public function save_supplement_comment($survey_id, $supplement_id, $user_id, $comment_text) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_supplement_comments';
+
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE user_id = %d AND supplement_id = %d",
+            $user_id,
+            $supplement_id
+        ));
+
+        if ($existing) {
+            // Update existing comment
+            return $wpdb->update(
+                $table,
+                array('comment_text' => $comment_text),
+                array('id' => $existing->id)
+            );
+        } else {
+            // Insert new comment
+            return $wpdb->insert($table, array(
+                'survey_id' => $survey_id,
+                'supplement_id' => $supplement_id,
+                'user_id' => $user_id,
+                'comment_text' => $comment_text
+            ));
+        }
+    }
+
+    /**
+     * Get user's comments for a survey
+     */
+    public function get_user_supplement_comments($user_id, $survey_id) {
+        global $wpdb;
+        $comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT c.*, s.name as supplement_name, s.sort_order
+             FROM {$comments_table} c
+             INNER JOIN {$supplements_table} s ON c.supplement_id = s.id
+             WHERE c.user_id = %d AND c.survey_id = %d
+             ORDER BY s.sort_order ASC",
+            $user_id,
+            $survey_id
+        ));
+    }
+
+    /**
+     * Get all comments for a survey with user info (admin)
+     */
+    public function get_survey_all_comments($survey_id) {
+        global $wpdb;
+        $comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT c.*, s.name as supplement_name, s.sort_order, u.first_name, u.last_name
+             FROM {$comments_table} c
+             INNER JOIN {$supplements_table} s ON c.supplement_id = s.id
+             INNER JOIN {$users_table} u ON c.user_id = u.id
+             WHERE c.survey_id = %d
+             ORDER BY u.first_name ASC, s.sort_order ASC",
+            $survey_id
+        ));
+    }
+
+    /**
+     * Get users who have commented on a survey
+     */
+    public function get_survey_commenters($survey_id) {
+        global $wpdb;
+        $comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT u.id, u.first_name, u.last_name, u.telegram_id
+             FROM {$users_table} u
+             INNER JOIN {$comments_table} c ON u.id = c.user_id
+             WHERE c.survey_id = %d
+             ORDER BY u.first_name ASC",
+            $survey_id
+        ));
     }
 }

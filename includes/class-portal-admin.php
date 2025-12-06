@@ -916,12 +916,18 @@ class CP_Admin {
             <h2 class="nav-tab-wrapper">
                 <a href="?page=customer-portal-surveys&view=assignments" class="nav-tab <?php echo $view === 'assignments' ? 'nav-tab-active' : ''; ?>">Assignments</a>
                 <a href="?page=customer-portal-surveys&view=results" class="nav-tab <?php echo $view === 'results' ? 'nav-tab-active' : ''; ?>">Results</a>
+                <a href="?page=customer-portal-surveys&view=supplement_surveys" class="nav-tab <?php echo $view === 'supplement_surveys' ? 'nav-tab-active' : ''; ?>">Supplement Surveys</a>
+                <a href="?page=customer-portal-surveys&view=supplement_feedback" class="nav-tab <?php echo $view === 'supplement_feedback' ? 'nav-tab-active' : ''; ?>">Client Feedback</a>
             </h2>
 
             <?php if ($view === 'assignments'): ?>
                 <?php $this->surveys_assignments_view(); ?>
             <?php elseif ($view === 'results'): ?>
                 <?php $this->surveys_results_view(); ?>
+            <?php elseif ($view === 'supplement_surveys'): ?>
+                <?php $this->supplement_surveys_view(); ?>
+            <?php elseif ($view === 'supplement_feedback'): ?>
+                <?php $this->supplement_feedback_view(); ?>
             <?php endif; ?>
         </div>
         <?php
@@ -1162,5 +1168,275 @@ class CP_Admin {
             </table>
         </div>
         <?php
+    }
+
+    /**
+     * Supplement Surveys Management View
+     */
+    private function supplement_surveys_view() {
+        // Handle create/edit/delete actions
+        if (isset($_POST['cp_action']) && isset($_POST['cp_supplement_nonce'])) {
+            if (!wp_verify_nonce($_POST['cp_supplement_nonce'], 'cp_supplement_action')) {
+                wp_die(__('Security check failed.'));
+            }
+
+            if ($_POST['cp_action'] === 'save_survey') {
+                $survey_id = isset($_POST['survey_id']) ? intval($_POST['survey_id']) : 0;
+                $title = sanitize_text_field($_POST['survey_title']);
+                $supplements_text = sanitize_textarea_field($_POST['supplements_list']);
+
+                // Parse supplements by newline
+                $supplements = array_filter(array_map('trim', explode("\n", $supplements_text)));
+
+                $saved_id = CP()->database->save_supplement_survey($survey_id, $title, $supplements);
+
+                if ($saved_id) {
+                    echo '<div class="notice notice-success"><p>Survey saved successfully!</p></div>';
+                } else {
+                    echo '<div class="notice notice-error"><p>Error saving survey.</p></div>';
+                }
+            }
+
+            if ($_POST['cp_action'] === 'delete_survey' && isset($_POST['survey_id'])) {
+                CP()->database->delete_supplement_survey(intval($_POST['survey_id']));
+                echo '<div class="notice notice-success"><p>Survey deleted!</p></div>';
+            }
+        }
+
+        $edit_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
+        $edit_survey = null;
+        $supplements_text = '';
+
+        if ($edit_id) {
+            $edit_survey = CP()->database->get_supplement_survey($edit_id);
+            if ($edit_survey && !empty($edit_survey->supplements)) {
+                $supplements_text = implode("\n", array_map(function($s) { return $s->name; }, $edit_survey->supplements));
+            }
+        }
+
+        $surveys = CP()->database->get_supplement_surveys();
+
+        ?>
+        <div class="cp-supplement-surveys">
+            <h2><?php echo $edit_id ? 'Edit Survey' : 'Create New Survey'; ?></h2>
+
+            <form method="post" style="max-width: 600px;">
+                <?php wp_nonce_field('cp_supplement_action', 'cp_supplement_nonce'); ?>
+                <input type="hidden" name="cp_action" value="save_survey">
+                <?php if ($edit_id): ?>
+                    <input type="hidden" name="survey_id" value="<?php echo $edit_id; ?>">
+                <?php endif; ?>
+
+                <table class="form-table">
+                    <tr>
+                        <th><label for="survey_title">Survey Title</label></th>
+                        <td>
+                            <input type="text" id="survey_title" name="survey_title"
+                                   value="<?php echo $edit_survey ? esc_attr($edit_survey->title) : ''; ?>"
+                                   class="regular-text" required>
+                            <p class="description">E.g., "Urīnskābes mazināšanas protokolam"</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="supplements_list">Supplements List</label></th>
+                        <td>
+                            <textarea id="supplements_list" name="supplements_list" rows="15"
+                                      class="large-text code" required><?php echo esc_textarea($supplements_text); ?></textarea>
+                            <p class="description">One supplement per line</p>
+                        </td>
+                    </tr>
+                </table>
+
+                <p class="submit">
+                    <button type="submit" class="button button-primary">
+                        <?php echo $edit_id ? 'Update Survey' : 'Create Survey'; ?>
+                    </button>
+                    <?php if ($edit_id): ?>
+                        <a href="?page=customer-portal-surveys&view=supplement_surveys" class="button">Cancel</a>
+                    <?php endif; ?>
+                </p>
+            </form>
+
+            <hr style="margin: 40px 0;">
+
+            <h2>Existing Surveys</h2>
+            <?php if (empty($surveys)): ?>
+                <p>No supplement surveys yet.</p>
+            <?php else: ?>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Supplements Count</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($surveys as $survey): ?>
+                            <?php
+                            $survey_data = CP()->database->get_supplement_survey($survey->id);
+                            $supplement_count = count($survey_data->supplements ?? []);
+                            ?>
+                            <tr>
+                                <td><strong><?php echo esc_html($survey->title); ?></strong></td>
+                                <td><?php echo $supplement_count; ?> supplements</td>
+                                <td><?php echo date('F j, Y', strtotime($survey->created_at)); ?></td>
+                                <td>
+                                    <a href="?page=customer-portal-surveys&view=supplement_surveys&edit=<?php echo $survey->id; ?>"
+                                       class="button button-small">Edit</a>
+                                    <form method="post" style="display: inline;">
+                                        <?php wp_nonce_field('cp_supplement_action', 'cp_supplement_nonce'); ?>
+                                        <input type="hidden" name="cp_action" value="delete_survey">
+                                        <input type="hidden" name="survey_id" value="<?php echo $survey->id; ?>">
+                                        <button type="submit" class="button button-small"
+                                                onclick="return confirm('Delete this survey? All comments will be lost.');">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Client Supplement Feedback View
+     */
+    private function supplement_feedback_view() {
+        $surveys = CP()->database->get_supplement_surveys();
+
+        if (empty($surveys)) {
+            echo '<p>No supplement surveys created yet. <a href="?page=customer-portal-surveys&view=supplement_surveys">Create one</a></p>';
+            return;
+        }
+
+        $selected_survey_id = isset($_GET['survey_id']) ? intval($_GET['survey_id']) : $surveys[0]->id;
+        $selected_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+
+        $commenters = CP()->database->get_survey_commenters($selected_survey_id);
+        $comments = [];
+
+        if ($selected_user_id) {
+            $comments = CP()->database->get_user_supplement_comments($selected_user_id, $selected_survey_id);
+            $user = CP()->database->get_active_users();
+            $user = array_filter($user, function($u) use ($selected_user_id) {
+                return $u->id == $selected_user_id;
+            });
+            $user = reset($user);
+        }
+
+        ?>
+        <div class="cp-supplement-feedback">
+            <h2>Client Supplement Feedback</h2>
+
+            <form method="get" style="margin-bottom: 20px; background: #f9f9f9; padding: 15px; border: 1px solid #ddd;">
+                <input type="hidden" name="page" value="customer-portal-surveys">
+                <input type="hidden" name="view" value="supplement_feedback">
+
+                <table class="form-table">
+                    <tr>
+                        <th><label>Select Survey</label></th>
+                        <td>
+                            <select name="survey_id" onchange="this.form.submit()">
+                                <?php foreach ($surveys as $survey): ?>
+                                    <option value="<?php echo $survey->id; ?>"
+                                            <?php selected($selected_survey_id, $survey->id); ?>>
+                                        <?php echo esc_html($survey->title); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label>Select Client</label></th>
+                        <td>
+                            <select name="user_id" onchange="this.form.submit()">
+                                <option value="">-- Select a client --</option>
+                                <?php foreach ($commenters as $commenter): ?>
+                                    <option value="<?php echo $commenter->id; ?>"
+                                            <?php selected($selected_user_id, $commenter->id); ?>>
+                                        <?php echo esc_html(trim($commenter->first_name . ' ' . $commenter->last_name)); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+            </form>
+
+            <?php if ($selected_user_id && !empty($comments)): ?>
+                <div style="margin-bottom: 20px;">
+                    <a href="?page=customer-portal-surveys&view=supplement_feedback&survey_id=<?php echo $selected_survey_id; ?>&user_id=<?php echo $selected_user_id; ?>&export=txt"
+                       class="button button-primary">
+                        Export to TXT
+                    </a>
+                </div>
+
+                <h3>Feedback from <?php echo esc_html(trim($user->first_name . ' ' . $user->last_name)); ?></h3>
+
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th width="30%">Supplement Name</th>
+                            <th width="60%">Comment</th>
+                            <th width="10%">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($comments as $comment): ?>
+                            <tr>
+                                <td><strong><?php echo esc_html($comment->supplement_name); ?></strong></td>
+                                <td><?php echo nl2br(esc_html($comment->comment_text)); ?></td>
+                                <td><?php echo date('M j, Y', strtotime($comment->created_at)); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php elseif ($selected_user_id): ?>
+                <p>This client hasn't added any comments yet.</p>
+            <?php else: ?>
+                <p>Select a client to view their feedback.</p>
+            <?php endif; ?>
+        </div>
+        <?php
+
+        // Handle TXT export
+        if (isset($_GET['export']) && $_GET['export'] === 'txt' && $selected_user_id && !empty($comments)) {
+            $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
+            exit;
+        }
+    }
+
+    /**
+     * Export supplement feedback to TXT
+     */
+    private function export_supplement_feedback_txt($survey_id, $user_id, $comments, $user) {
+        $survey = CP()->database->get_supplement_survey($survey_id);
+        $client_name = trim($user->first_name . ' ' . $user->last_name);
+
+        $filename = 'supplement-feedback-' . sanitize_file_name($client_name) . '-' . date('Y-m-d') . '.txt';
+
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+        echo "Klients: " . $client_name . "\n";
+        echo "Survey: " . $survey->title . "\n";
+        echo "\n";
+        echo str_repeat("=", 60) . "\n";
+        echo "\n";
+
+        foreach ($comments as $comment) {
+            echo "[" . $comment->supplement_name . "]\n";
+            echo $comment->comment_text . "\n";
+            echo "\n";
+        }
+
+        echo str_repeat("=", 60) . "\n";
+        echo "Exported: " . date('Y-m-d H:i:s') . "\n";
     }
 }

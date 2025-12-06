@@ -63,6 +63,14 @@ class CP_Frontend {
             true
         );
 
+        wp_enqueue_script(
+            'cp-supplement-feedback',
+            CP_PLUGIN_URL . 'assets/js/supplement-feedback.js',
+            array(),
+            CP_VERSION,
+            true
+        );
+
         // Pass data to JS
         wp_localize_script('cp-portal', 'cpConfig', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -161,6 +169,13 @@ class CP_Frontend {
                     </div>
                     <div id="survey-wizard" style="display:none;">
                         <!-- Survey wizard content will be inserted here -->
+                    </div>
+
+                    <div style="margin-top: 40px;">
+                        <h3>Supplement Feedback</h3>
+                        <div id="supplement-surveys-container">
+                            <p>Loading supplement surveys...</p>
+                        </div>
                     </div>
                 </div>
 
