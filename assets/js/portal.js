@@ -282,6 +282,12 @@
         loadChecklists(user.id);
         loadLinks(user.id);
         loadSurveys(user.id);
+
+        // Initialize supplement feedback if available
+        if (window.cpInitSupplementFeedback) {
+            window.cpInitSupplementFeedback(user);
+        }
+
         // Calendar will auto-load via calendar.js init when tab is rendered
     }
     
@@ -342,11 +348,6 @@
         }, function(error) {
             document.getElementById('surveys-container').innerHTML = '<p>Failed to load surveys: ' + escapeHtml(error) + '</p>';
         });
-
-        // Also initialize supplement feedback if available
-        if (window.cpInitSupplementFeedback && currentUser) {
-            window.cpInitSupplementFeedback(currentUser);
-        }
     }
     
     // ========================================
