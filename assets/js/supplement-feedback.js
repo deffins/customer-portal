@@ -33,7 +33,7 @@
         // Get assignments that match supplement_feedback type
         ajaxPost({
             action: 'cp_get_assigned_surveys',
-            telegram_id: currentUser.telegram_id,
+            telegram_id: currentUser.id,
             nonce: CONFIG.nonce
         }, function(response) {
             // Filter for supplement_feedback type surveys
