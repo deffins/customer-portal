@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Customer Portal with Telegram Auth
  * Description: Customer file sharing portal with Telegram authentication, Google Drive integration, and appointment booking
- * Version: 2.1.2
+ * Version: 2.1.2.11
  * Author: Your Name
  * Text Domain: customer-portal
  */
@@ -74,6 +74,42 @@ class CustomerPortal {
     public function get_table_name() {
         global $wpdb;
         return $wpdb->prefix . 'customer_portal_users';
+    }
+
+    /**
+     * Get Telegram bot token
+     * Checks wp-config.php constant first, falls back to option
+     */
+    public function get_bot_token() {
+        if (defined('CP_TELEGRAM_BOT_TOKEN') && CP_TELEGRAM_BOT_TOKEN !== '') {
+            return trim(CP_TELEGRAM_BOT_TOKEN);
+        }
+        return get_option('cp_telegram_bot_token', '');
+    }
+
+    /**
+     * Get Telegram bot username
+     * Checks wp-config.php constant first, falls back to option
+     */
+    public function get_bot_username() {
+        if (defined('CP_TELEGRAM_BOT_USERNAME') && CP_TELEGRAM_BOT_USERNAME !== '') {
+            return trim(CP_TELEGRAM_BOT_USERNAME);
+        }
+        return get_option('cp_telegram_bot_username', '');
+    }
+
+    /**
+     * Check if bot token is defined in wp-config.php
+     */
+    public function is_bot_token_constant() {
+        return defined('CP_TELEGRAM_BOT_TOKEN') && CP_TELEGRAM_BOT_TOKEN !== '';
+    }
+
+    /**
+     * Check if bot username is defined in wp-config.php
+     */
+    public function is_bot_username_constant() {
+        return defined('CP_TELEGRAM_BOT_USERNAME') && CP_TELEGRAM_BOT_USERNAME !== '';
     }
 }
 

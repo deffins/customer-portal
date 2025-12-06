@@ -63,7 +63,7 @@ class CP_Ajax {
         }
         
         $user_data = array_map('sanitize_text_field', $_POST['user']);
-        $bot_token = get_option('cp_telegram_bot_token');
+        $bot_token = CP()->get_bot_token();
         
         if (!isset($user_data['hash'])) {
             wp_send_json_error(array('message' => 'Invalid authentication data'));

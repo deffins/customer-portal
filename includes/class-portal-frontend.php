@@ -67,7 +67,7 @@ class CP_Frontend {
         wp_localize_script('cp-portal', 'cpConfig', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('cp_nonce'),
-            'botUsername' => get_option('cp_telegram_bot_username'),
+            'botUsername' => CP()->get_bot_username(),
             'debug' => false
         ));
 

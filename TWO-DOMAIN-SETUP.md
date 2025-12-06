@@ -120,12 +120,85 @@ git push
 └─────────────────────────────────────────────┘
 ```
 
+## Environment-Specific Configuration
+
+### Telegram Bot Setup (Important!)
+
+Each WordPress site needs its own Telegram bot configuration to avoid conflicts:
+
+**Why?** If both sites used the same Telegram bot, users would get confused seeing the same bot on both test and production, and authentication tokens would be shared.
+
+**Solution:** Use wp-config.php constants (one for each site, NOT in git)
+
+#### Setup Steps
+
+**1. Create Two Telegram Bots:**
+- Open Telegram, search for `@BotFather`
+- Create production bot: `/newbot` → Name it (e.g., "Deffo Customer Portal")
+- Copy production bot token and username
+- Create test bot: `/newbot` → Name it (e.g., "Deffo Test Bot")
+- Copy test bot token and username
+
+**2. Configure deffo.pro (Production):**
+Edit `/domains/deffo.pro/public_html/wp-config.php` and add before `/* That's all, stop editing! */`:
+
+```php
+// Customer Portal - Production Telegram Bot
+define('CP_TELEGRAM_BOT_TOKEN', 'your-production-bot-token-here');
+define('CP_TELEGRAM_BOT_USERNAME', 'your_prod_bot_username'); // without @
+```
+
+**3. Configure fons.lv (Test):**
+Edit `/home/u226352978/domains/fons.lv/public_html/wp-config.php` and add before `/* That's all, stop editing! */`:
+
+```php
+// Customer Portal - Test Telegram Bot
+define('CP_TELEGRAM_BOT_TOKEN', 'your-test-bot-token-here');
+define('CP_TELEGRAM_BOT_USERNAME', 'your_test_bot_username'); // without @
+```
+
+**4. Verify Setup:**
+- Go to WordPress Admin → Customer Portal → Settings
+- You should see telegram fields are **disabled** with notice "defined in wp-config.php"
+- This confirms constants are working!
+
+**See WP-CONFIG-SETUP.md for detailed instructions.**
+
+### How This Works
+
+```
+Same Plugin Code (from git)
+         ↓
+    ┌────────┴────────┐
+    ↓                 ↓
+deffo.pro          fons.lv
+wp-config.php      wp-config.php
+Production Bot     Test Bot
+    ↓                 ↓
+Users see          You test with
+prod bot           test bot
+```
+
+**Key Point:** Pushing code from test → main does NOT affect bot configuration!
+- Code is the same on both sites
+- Each site reads its own wp-config.php
+- Bots stay environment-specific
+- No manual intervention needed!
+
+### Google Credentials
+
+Google Calendar/Drive credentials are **the same** on both sites:
+- Still configured via WordPress admin settings page
+- No wp-config.php constants needed
+- Shared between environments (same Google project)
+
 ## Current Status
 
 - ✅ Test branch configured to deploy to **fons.lv**
 - ✅ Main branch configured to deploy to **deffo.pro**
 - ✅ You are currently on: **test** branch
 - ✅ WordPress copied to fons.lv (if clone completed)
+- ⚠️ **TODO:** Configure Telegram bots in wp-config.php (see above)
 
 ## Next Steps
 

@@ -683,8 +683,13 @@ class CP_Admin {
                 wp_die(__('Security check failed.'));
             }
             
-            update_option('cp_telegram_bot_token', sanitize_text_field($_POST['telegram_bot_token']));
-            update_option('cp_telegram_bot_username', sanitize_text_field($_POST['telegram_bot_username']));
+            // Only update Telegram options if not defined as constants in wp-config.php
+            if (!CP()->is_bot_token_constant()) {
+                update_option('cp_telegram_bot_token', sanitize_text_field($_POST['telegram_bot_token']));
+            }
+            if (!CP()->is_bot_username_constant()) {
+                update_option('cp_telegram_bot_username', sanitize_text_field($_POST['telegram_bot_username']));
+            }
             update_option('cp_google_client_id', sanitize_text_field($_POST['google_client_id']));
             update_option('cp_google_client_secret', sanitize_text_field($_POST['google_client_secret']));
             update_option('cp_google_refresh_token', sanitize_text_field($_POST['google_refresh_token']));
@@ -699,19 +704,34 @@ class CP_Admin {
                 <?php wp_nonce_field('cp_save_settings', 'cp_settings_nonce'); ?>
                 
                 <h2>Telegram Bot</h2>
+                <?php if (CP()->is_bot_token_constant() || CP()->is_bot_username_constant()): ?>
+                    <div class="notice notice-info inline">
+                        <p><strong>Note:</strong> Telegram bot settings are defined in wp-config.php and cannot be edited here.</p>
+                    </div>
+                <?php endif; ?>
                 <table class="form-table">
                     <tr>
                         <th><label>Bot Token</label></th>
                         <td>
-                            <input type="text" name="telegram_bot_token" value="<?php echo esc_attr(get_option('cp_telegram_bot_token')); ?>" class="regular-text">
-                            <p class="description">Get from @BotFather</p>
+                            <?php if (CP()->is_bot_token_constant()): ?>
+                                <input type="text" value="<?php echo esc_attr(substr(CP()->get_bot_token(), 0, 20) . '... (defined in wp-config.php)'); ?>" class="regular-text" disabled>
+                                <p class="description">Configured in wp-config.php constant CP_TELEGRAM_BOT_TOKEN</p>
+                            <?php else: ?>
+                                <input type="text" name="telegram_bot_token" value="<?php echo esc_attr(get_option('cp_telegram_bot_token')); ?>" class="regular-text">
+                                <p class="description">Get from @BotFather</p>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
                         <th><label>Bot Username</label></th>
                         <td>
-                            <input type="text" name="telegram_bot_username" value="<?php echo esc_attr(get_option('cp_telegram_bot_username')); ?>" class="regular-text">
-                            <p class="description">Without @</p>
+                            <?php if (CP()->is_bot_username_constant()): ?>
+                                <input type="text" value="<?php echo esc_attr(CP()->get_bot_username() . ' (defined in wp-config.php)'); ?>" class="regular-text" disabled>
+                                <p class="description">Configured in wp-config.php constant CP_TELEGRAM_BOT_USERNAME</p>
+                            <?php else: ?>
+                                <input type="text" name="telegram_bot_username" value="<?php echo esc_attr(get_option('cp_telegram_bot_username')); ?>" class="regular-text">
+                                <p class="description">Without @</p>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 </table>
