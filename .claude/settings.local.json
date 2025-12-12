@@ -9,7 +9,8 @@
       "Bash(tar:*)",
       "Bash(git checkout:*)",
       "Bash(find:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(del nul)"
     ],
     "deny": [],
     "ask": []
