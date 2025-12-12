@@ -1220,15 +1220,8 @@ class CP_Admin {
         }
 
         $edit_id = isset($_GET['edit']) ? intval($_GET['edit']) : 0;
-        $assign_id = isset($_GET['assign']) ? intval($_GET['assign']) : 0;
         $edit_survey = null;
         $supplements_text = '';
-
-        // If assigning, show assignment UI
-        if ($assign_id) {
-            $this->show_supplement_assignment_ui($assign_id);
-            return;
-        }
 
         if ($edit_id) {
             $edit_survey = CP()->database->get_supplement_survey($edit_id);
@@ -1308,8 +1301,6 @@ class CP_Admin {
                                 <td>
                                     <a href="?page=customer-portal-surveys&view=supplement_surveys&edit=<?php echo $survey->id; ?>"
                                        class="button button-small">Edit</a>
-                                    <a href="?page=customer-portal-surveys&view=supplement_surveys&assign=<?php echo $survey->id; ?>"
-                                       class="button button-small button-primary">Assign to Users</a>
                                     <form method="post" style="display: inline;">
                                         <?php wp_nonce_field('cp_supplement_action', 'cp_supplement_nonce'); ?>
                                         <input type="hidden" name="cp_action" value="delete_survey">

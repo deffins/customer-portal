@@ -171,8 +171,8 @@ class CP_Frontend {
                         <!-- Survey wizard content will be inserted here -->
                     </div>
 
-                    <div style="margin-top: 40px;">
-                        <h3>Supplement Feedback</h3>
+                    <div id="supplement-surveys-section" style="margin-top: 40px;">
+                        <h3>Supplement Surveys</h3>
                         <div id="supplement-surveys-container">
                             <p>Loading supplement surveys...</p>
                         </div>

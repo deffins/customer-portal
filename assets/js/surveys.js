@@ -22,8 +22,22 @@
             return;
         }
 
-        var html = '<div class="surveys-list">';
+        // Filter out supplement surveys (they will be handled separately)
+        var regularSurveys = [];
         surveys.forEach(function(survey) {
+            // Skip surveys with IDs starting with "supplement_"
+            if (!survey.survey_id || survey.survey_id.indexOf('supplement_') !== 0) {
+                regularSurveys.push(survey);
+            }
+        });
+
+        if (regularSurveys.length === 0) {
+            container.innerHTML = '<p>No surveys assigned yet.</p>';
+            return;
+        }
+
+        var html = '<div class="surveys-list">';
+        regularSurveys.forEach(function(survey) {
             var statusLabel = survey.status === 'completed' ? 'Completed' : 'Not Started';
             var statusClass = survey.status === 'completed' ? 'completed' : 'pending';
             var lastCompletedText = '';

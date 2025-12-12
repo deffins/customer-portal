@@ -36,7 +36,7 @@
             telegram_id: currentUser.id,
             nonce: CONFIG.nonce
         }, function(response) {
-            // Filter for supplement_feedback type surveys
+            // Filter for supplement_feedback type surveys and get survey details
             var supplementSurveys = [];
             if (response.data && response.data.surveys) {
                 response.data.surveys.forEach(function(assignment) {
@@ -44,22 +44,84 @@
                     if (assignment.survey_id && assignment.survey_id.indexOf('supplement_') === 0) {
                         var surveyId = parseInt(assignment.survey_id.replace('supplement_', ''));
                         if (!isNaN(surveyId)) {
-                            supplementSurveys.push(surveyId);
+                            supplementSurveys.push({
+                                id: surveyId,
+                                title: assignment.title || 'Supplement Survey',
+                                status: assignment.status || 'Not Started'
+                            });
                         }
                     }
                 });
             }
 
             if (supplementSurveys.length > 0) {
-                // For simplicity, just load the first assigned supplement survey
-                cpDisplaySupplementSurvey(supplementSurveys[0]);
+                displaySupplementSurveysList(supplementSurveys);
             } else {
-                container.innerHTML = '<p>No supplement surveys assigned yet.</p>';
+                // Hide the entire supplement surveys section if no surveys are assigned
+                var section = document.getElementById('supplement-surveys-section');
+                if (section) {
+                    section.style.display = 'none';
+                }
             }
         }, function(error) {
             console.error('Failed to load assignments:', error);
             container.innerHTML = '<p>Error loading supplement surveys.</p>';
         });
+    }
+
+    /**
+     * Display list of supplement surveys as clickable cards
+     */
+    function displaySupplementSurveysList(surveys) {
+        var container = document.getElementById('supplement-surveys-container');
+        if (!container) return;
+
+        var html = '<div class="supplement-surveys-list">';
+        surveys.forEach(function(survey) {
+            var statusLabel = survey.status === 'completed' ? 'Completed' : 'Not Started';
+            var statusClass = survey.status === 'completed' ? 'completed' : 'pending';
+
+            html += '<div class="survey-card supplement-survey-card" data-survey-id="' + survey.id + '">';
+            html += '<h4>' + escapeHtml(survey.title) + '</h4>';
+            html += '<div class="survey-status ' + statusClass + '">' + statusLabel + '</div>';
+            html += '<button class="button button-primary start-supplement-survey-btn" data-survey-id="' + survey.id + '">Start Survey</button>';
+            html += '</div>';
+        });
+        html += '</div>';
+
+        // Add hidden container for the survey form
+        html += '<div id="supplement-survey-form-container" style="display: none;"></div>';
+
+        container.innerHTML = html;
+
+        // Attach event listeners to survey buttons
+        var startButtons = container.querySelectorAll('.start-supplement-survey-btn');
+        for (var i = 0; i < startButtons.length; i++) {
+            startButtons[i].addEventListener('click', function() {
+                var surveyId = parseInt(this.getAttribute('data-survey-id'));
+                showSupplementSurveyForm(surveyId);
+            });
+        }
+    }
+
+    /**
+     * Show the supplement survey feedback form
+     */
+    function showSupplementSurveyForm(surveyId) {
+        // Hide the surveys list
+        var listContainer = document.querySelector('.supplement-surveys-list');
+        if (listContainer) {
+            listContainer.style.display = 'none';
+        }
+
+        // Show the form container
+        var formContainer = document.getElementById('supplement-survey-form-container');
+        if (formContainer) {
+            formContainer.style.display = 'block';
+        }
+
+        // Load the survey
+        cpDisplaySupplementSurvey(surveyId);
     }
 
     /**
@@ -105,11 +167,15 @@
      * Render supplement survey with all supplements
      */
     function renderSupplementSurvey(survey, existingComments) {
-        var container = document.getElementById('supplement-surveys-container');
+        var container = document.getElementById('supplement-survey-form-container');
         if (!container) return;
 
         var html = '';
         html += '<div class="supplement-survey">';
+
+        // Add back button
+        html += '<button class="button back-to-surveys-btn" style="margin-bottom: 20px;">← Back to Surveys</button>';
+
         html += '<h3>' + escapeHtml(survey.title) + '</h3>';
         html += '<p class="supplement-survey-description">Add your feedback for each supplement:</p>';
 
@@ -160,6 +226,31 @@
 
         // Attach event listeners
         attachSupplementEventListeners(survey);
+
+        // Attach back button listener
+        var backBtn = container.querySelector('.back-to-surveys-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function() {
+                hideSupplementSurveyForm();
+            });
+        }
+    }
+
+    /**
+     * Hide the supplement survey form and show the surveys list
+     */
+    function hideSupplementSurveyForm() {
+        // Hide the form container
+        var formContainer = document.getElementById('supplement-survey-form-container');
+        if (formContainer) {
+            formContainer.style.display = 'none';
+        }
+
+        // Show the surveys list
+        var listContainer = document.querySelector('.supplement-surveys-list');
+        if (listContainer) {
+            listContainer.style.display = 'block';
+        }
     }
 
     /**
