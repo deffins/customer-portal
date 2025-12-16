@@ -382,15 +382,18 @@
         // Mark as updating
         pendingUpdates.add(key);
 
-        // Update UI with animation
+        // Update just the clicked cell immediately (optimistic UI update)
         const cell = document.querySelector(`.bc-slot-cell[data-date="${date}"][data-hour="${hour}"]`);
         if (cell) {
-            cell.style.opacity = '0.6';
-            cell.style.transition = 'all 0.2s ease';
+            // Remove old status class
+            cell.classList.remove('bc-status-free', 'bc-status-blocked', 'bc-status-booked');
+            // Add new status class
+            cell.classList.add(`bc-status-${newStatus}`);
+            // Update data attribute
+            cell.setAttribute('data-status', newStatus);
+            // Show loading state
+            cell.style.opacity = '0.7';
         }
-
-        // Re-render calendar immediately
-        renderCalendar();
 
         const formData = new FormData();
         const action = window.cpCalendarConfig ? 'cp_toggle_slot_availability' : 'bc_toggle_slot';
@@ -414,7 +417,10 @@
                     is_mine: false,
                     customer_name: null
                 };
-                renderCalendar();
+                // Restore opacity only
+                if (cell) {
+                    cell.style.opacity = '1';
+                }
             } else {
                 // Revert on error
                 slotsData[key] = {
@@ -422,7 +428,13 @@
                     is_mine: false,
                     customer_name: null
                 };
-                renderCalendar();
+                // Revert the cell visually
+                if (cell) {
+                    cell.classList.remove('bc-status-free', 'bc-status-blocked', 'bc-status-booked');
+                    cell.classList.add(`bc-status-${oldStatus}`);
+                    cell.setAttribute('data-status', oldStatus);
+                    cell.style.opacity = '1';
+                }
                 alert('Error: ' + (data.data.message || data.message || 'Unknown error'));
             }
         })
@@ -434,7 +446,13 @@
                 is_mine: false,
                 customer_name: null
             };
-            renderCalendar();
+            // Revert the cell visually
+            if (cell) {
+                cell.classList.remove('bc-status-free', 'bc-status-blocked', 'bc-status-booked');
+                cell.classList.add(`bc-status-${oldStatus}`);
+                cell.setAttribute('data-status', oldStatus);
+                cell.style.opacity = '1';
+            }
             console.error('Error toggling slot:', error);
             alert('Failed to update slot');
         });
