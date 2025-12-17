@@ -39,8 +39,10 @@
      * Load and display a specific supplement survey
      */
     function loadAndDisplaySupplementSurvey(surveyId) {
-        if (!currentUser) {
+        var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
+        if (!telegramId) {
             alert('Please log in first');
+            if (window.cpExitSurvey) window.cpExitSurvey();
             return;
         }
 
@@ -50,7 +52,7 @@
             nonce: CONFIG.nonce
         }, function(response) {
             var survey = response.data.survey;
-            loadUserCommentsAndRender(survey);
+            loadUserCommentsAndRender(survey, telegramId);
         }, function(error) {
             alert('Failed to load survey: ' + error);
             if (window.cpExitSurvey) window.cpExitSurvey();
@@ -184,19 +186,20 @@
     /**
      * Load user's existing comments and render the survey form
      */
-    function loadUserCommentsAndRender(survey) {
-        if (!currentUser) {
-            console.error('No current user set');
+    function loadUserCommentsAndRender(survey, telegramId) {
+        if (!telegramId) {
+            console.error('No telegram ID provided');
+            renderSupplementSurvey(survey, {});
             return;
         }
 
         ajaxPost({
             action: 'cp_get_user_supplement_comments',
             survey_id: survey.id,
-            user_id: currentUser.id,
+            telegram_id: telegramId,
             nonce: CONFIG.nonce
         }, function(response) {
-            var comments = response.data.comments;
+            var comments = response.data && response.data.comments ? response.data.comments : {};
             renderSupplementSurvey(survey, comments);
         }, function(error) {
             console.error('Failed to load comments:', error);

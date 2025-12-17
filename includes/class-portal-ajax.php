@@ -915,15 +915,30 @@ class CP_Ajax {
     public function save_supplement_comment() {
         check_ajax_referer('cp_nonce', 'nonce');
 
-        if (!isset($_POST['survey_id']) || !isset($_POST['supplement_id']) || !isset($_POST['user_id'])) {
+        if (!isset($_POST['survey_id']) || !isset($_POST['supplement_id'])) {
             wp_send_json_error(array('message' => 'Missing required fields'));
             return;
         }
 
         $survey_id = intval($_POST['survey_id']);
         $supplement_id = intval($_POST['supplement_id']);
-        $user_id = intval($_POST['user_id']);
         $comment_text = sanitize_textarea_field($_POST['comment_text']);
+
+        // Accept either user_id or telegram_id
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if (!$user) {
+                wp_send_json_error(array('message' => 'User not found'));
+                return;
+            }
+            $user_id = $user->id;
+        } elseif (isset($_POST['user_id'])) {
+            $user_id = intval($_POST['user_id']);
+        } else {
+            wp_send_json_error(array('message' => 'Missing user_id or telegram_id'));
+            return;
+        }
 
         $result = CP()->database->save_supplement_comment($survey_id, $supplement_id, $user_id, $comment_text);
 
@@ -940,13 +955,28 @@ class CP_Ajax {
     public function get_user_supplement_comments() {
         check_ajax_referer('cp_nonce', 'nonce');
 
-        if (!isset($_POST['survey_id']) || !isset($_POST['user_id'])) {
-            wp_send_json_error(array('message' => 'Missing required fields'));
+        if (!isset($_POST['survey_id'])) {
+            wp_send_json_error(array('message' => 'Missing survey_id'));
             return;
         }
 
         $survey_id = intval($_POST['survey_id']);
-        $user_id = intval($_POST['user_id']);
+
+        // Accept either user_id or telegram_id
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if (!$user) {
+                wp_send_json_error(array('message' => 'User not found'));
+                return;
+            }
+            $user_id = $user->id;
+        } elseif (isset($_POST['user_id'])) {
+            $user_id = intval($_POST['user_id']);
+        } else {
+            wp_send_json_error(array('message' => 'Missing user_id or telegram_id'));
+            return;
+        }
 
         $comments = CP()->database->get_user_supplement_comments($user_id, $survey_id);
 
