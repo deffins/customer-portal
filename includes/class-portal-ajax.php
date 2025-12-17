@@ -569,6 +569,17 @@ class CP_Ajax {
         $surveys_module = CP()->surveys;
         $available_surveys = $surveys_module->get_available_surveys();
 
+        // Add supplement surveys from database
+        $supplement_surveys = CP()->database->get_supplement_surveys();
+        foreach ($supplement_surveys as $survey) {
+            $available_surveys['supplement_' . $survey->id] = array(
+                'id' => 'supplement_' . $survey->id,
+                'title' => $survey->title,
+                'description' => '',
+                'type' => 'supplement_feedback'
+            );
+        }
+
         // Format assignments for frontend
         $formatted_assignments = array();
         foreach ($assignments as $assignment) {
