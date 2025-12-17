@@ -362,6 +362,7 @@ class CP_Ajax {
         $date = sanitize_text_field($_POST['date']);
         $hour = intval($_POST['hour']);
         $client_email = isset($_POST['client_email']) ? sanitize_text_field($_POST['client_email']) : '';
+        $booking_notes = isset($_POST['booking_notes']) ? sanitize_textarea_field($_POST['booking_notes']) : '';
 
         // Validate date format
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -402,7 +403,7 @@ class CP_Ajax {
                 // Save email on the user record for admin visibility
                 CP()->database->update_user_email($user->id, $client_email);
 
-                $event_result = $this->create_google_event($date, $hour, $client_email, $user);
+                $event_result = $this->create_google_event($date, $hour, $client_email, $user, $booking_notes);
                 if ($event_result['success']) {
                     $response['google_event_id'] = $event_result['event_id'];
                     if (!empty($event_result['meet_link'])) {
@@ -718,7 +719,7 @@ class CP_Ajax {
     /**
      * Create Google Calendar event with Meet link for a booking
      */
-    private function create_google_event($date, $hour, $client_email, $user) {
+    private function create_google_event($date, $hour, $client_email, $user, $booking_notes = '') {
         // Ensure Google credentials exist
         $token_info = $this->get_google_access_token();
         if (empty($token_info['token'])) {
@@ -735,6 +736,11 @@ class CP_Ajax {
 
         $summary = 'Call with deffo.pro';
         $description = 'Booking for ' . trim($user->first_name . ' ' . $user->last_name);
+
+        // Add booking notes if provided
+        if (!empty($booking_notes)) {
+            $description .= "\n\n" . $booking_notes;
+        }
 
         $payload = array(
             'summary' => $summary,

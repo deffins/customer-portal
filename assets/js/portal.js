@@ -735,6 +735,11 @@
         if (modal) {
             modal.style.display = 'none';
         }
+        // Clear the notes textarea for next booking
+        var bookingNotesInput = document.getElementById('booking-notes');
+        if (bookingNotesInput) {
+            bookingNotesInput.value = '';
+        }
     }
 
     function isValidEmail(email) {
@@ -744,7 +749,7 @@
     }
 
     // Book a slot
-    function bookSlot(date, hour, clientEmail) {
+    function bookSlot(date, hour, clientEmail, bookingNotes) {
         var telegramId = window.cpGetUserTelegramId();
         if (!telegramId) {
             alert('Please log in to book appointments');
@@ -778,6 +783,7 @@
             date: date,
             hour: hour,
             client_email: clientEmail ? clientEmail : '',
+            booking_notes: bookingNotes ? bookingNotes : '',
             nonce: CONFIG.nonce
         }, function(response) {
             // Persist email for convenience if provided
@@ -916,6 +922,7 @@
         var emailSkipBtn = document.getElementById('email-skip');
         var emailSaveBtn = document.getElementById('email-save');
         var emailInput = document.getElementById('email-input');
+        var bookingNotesInput = document.getElementById('booking-notes');
 
         if (emailSkipBtn) {
             emailSkipBtn.addEventListener('click', function() {
@@ -923,7 +930,8 @@
                     hideEmailModal();
                     return;
                 }
-                bookSlot(pendingBooking.date, pendingBooking.hour, null);
+                var notes = bookingNotesInput ? bookingNotesInput.value.trim() : '';
+                bookSlot(pendingBooking.date, pendingBooking.hour, null, notes || null);
                 pendingBooking = null;
             });
         }
@@ -939,7 +947,8 @@
                     alert('Please enter a valid email address or leave it blank.');
                     return;
                 }
-                bookSlot(pendingBooking.date, pendingBooking.hour, email || null);
+                var notes = bookingNotesInput ? bookingNotesInput.value.trim() : '';
+                bookSlot(pendingBooking.date, pendingBooking.hour, email || null, notes || null);
                 pendingBooking = null;
             });
         }
