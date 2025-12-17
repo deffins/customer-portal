@@ -109,8 +109,11 @@ class CP_Frontend {
             </div>
             
             <div id="portal-section" style="display:none;">
-                <h2>Welcome, <span id="user-name"></span>!</h2>
-                
+                <div class="portal-header">
+                    <h2>Welcome, <span id="user-name"></span>!</h2>
+                    <button id="logout-btn" class="button">Logout</button>
+                </div>
+
                 <div class="portal-tabs">
                     <button class="tab-button active" data-tab="files">Files</button>
                     <button class="tab-button" data-tab="checklists">Checklists</button>
@@ -178,8 +181,6 @@ class CP_Frontend {
                         </div>
                     </div>
                 </div>
-
-                <button id="logout-btn" class="button">Logout</button>
             </div>
 
             <!-- Booking Modal -->
