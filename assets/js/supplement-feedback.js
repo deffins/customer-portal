@@ -383,7 +383,8 @@
      * Save comment for a supplement
      */
     function saveComment(surveyId, supplementId) {
-        if (!currentUser) {
+        var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
+        if (!telegramId) {
             alert('User not authenticated');
             return;
         }
@@ -412,7 +413,7 @@
             action: 'cp_save_supplement_comment',
             survey_id: surveyId,
             supplement_id: supplementId,
-            user_id: currentUser.id,
+            telegram_id: telegramId,
             comment_text: commentText,
             nonce: CONFIG.nonce
         }, function(response) {
