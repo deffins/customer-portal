@@ -856,6 +856,19 @@ class CP_Database {
         $surveys_table = $wpdb->prefix . 'cp_surveys';
         $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
 
+        // Check for duplicate title (excluding current survey if editing)
+        $duplicate_check = $wpdb->prepare(
+            "SELECT id FROM {$surveys_table} WHERE title = %s AND type = 'supplement_feedback' AND id != %d",
+            $title,
+            $survey_id ? $survey_id : 0
+        );
+        $existing = $wpdb->get_var($duplicate_check);
+
+        if ($existing) {
+            // Duplicate title found
+            return false;
+        }
+
         if ($survey_id) {
             // Update existing survey
             $wpdb->update(

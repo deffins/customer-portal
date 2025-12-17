@@ -939,6 +939,17 @@ class CP_Admin {
     private function surveys_assignments_view() {
         $surveys_module = CP()->surveys;
         $available_surveys = $surveys_module->get_available_surveys();
+
+        // Add supplement surveys from database
+        $supplement_surveys = CP()->database->get_supplement_surveys();
+        foreach ($supplement_surveys as $survey) {
+            $available_surveys['supplement_' . $survey->id] = array(
+                'id' => 'supplement_' . $survey->id,
+                'title' => $survey->title,
+                'type' => 'supplement_feedback'
+            );
+        }
+
         $users = CP()->database->get_active_users();
         $assignments = CP()->database->get_all_survey_assignments();
 
@@ -1193,7 +1204,7 @@ class CP_Admin {
                 if ($saved_id) {
                     echo '<div class="notice notice-success"><p>Survey saved successfully!</p></div>';
                 } else {
-                    echo '<div class="notice notice-error"><p>Error saving survey.</p></div>';
+                    echo '<div class="notice notice-error"><p>Error saving survey. A survey with this title already exists.</p></div>';
                 }
             }
 
