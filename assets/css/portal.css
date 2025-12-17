@@ -836,16 +836,6 @@
     font-size: 14px;
 }
 
-.button-primary {
-    background: #E87C52;
-    color: white;
-    border: none;
-}
-
-.button-primary:hover {
-    background: #d66a3f;
-}
-
 .button {
     padding: 8px 16px;
     border: 1px solid #ddd;
@@ -857,6 +847,16 @@
 
 .button:hover {
     background: #f5f5f5;
+}
+
+.button-primary {
+    background: #E87C52;
+    color: white;
+    border: none;
+}
+
+.button-primary:hover {
+    background: #d66a3f;
 }
 
 .cp-notification {
