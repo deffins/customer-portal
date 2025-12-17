@@ -733,7 +733,7 @@ class CP_Ajax {
         $end_dt = clone $start_dt;
         $end_dt->modify('+1 hour');
 
-        $summary = 'Customer Appointment';
+        $summary = 'Call with deffo.pro';
         $description = 'Booking for ' . trim($user->first_name . ' ' . $user->last_name);
 
         $payload = array(
