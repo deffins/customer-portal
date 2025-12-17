@@ -166,19 +166,14 @@ class CP_Frontend {
                 </div>
 
                 <div id="surveys-tab" class="tab-content">
-                    <h3>Surveys</h3>
-                    <div id="surveys-container">
-                        <p>Loading surveys...</p>
-                    </div>
-                    <div id="survey-wizard" style="display:none;">
-                        <!-- Survey wizard content will be inserted here -->
-                    </div>
-
-                    <div id="supplement-surveys-section" style="margin-top: 40px;">
-                        <h3>Supplement Surveys</h3>
-                        <div id="supplement-surveys-container">
-                            <p>Loading supplement surveys...</p>
+                    <div id="surveys-list-view">
+                        <h3>Surveys</h3>
+                        <div id="surveys-container">
+                            <p>Loading surveys...</p>
                         </div>
+                    </div>
+                    <div id="survey-detail-view" style="display:none;">
+                        <!-- Survey wizard or supplement feedback content will be inserted here -->
                     </div>
                 </div>
             </div>

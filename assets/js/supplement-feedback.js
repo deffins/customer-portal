@@ -13,8 +13,49 @@
      */
     window.cpInitSupplementFeedback = function(user) {
         currentUser = user;
-        loadSupplementSurveys();
+        // No longer auto-loading separate section
     };
+
+    /**
+     * Start a supplement survey (called from main survey list)
+     */
+    window.cpStartSupplementSurvey = function(surveyId) {
+        // Hide surveys list view
+        var listView = document.getElementById('surveys-list-view');
+        if (listView) listView.style.display = 'none';
+
+        // Show detail view
+        var detailView = document.getElementById('survey-detail-view');
+        if (detailView) {
+            detailView.style.display = 'block';
+            detailView.innerHTML = '<p>Loading supplement survey...</p>';
+        }
+
+        // Load the survey
+        loadAndDisplaySupplementSurvey(surveyId);
+    };
+
+    /**
+     * Load and display a specific supplement survey
+     */
+    function loadAndDisplaySupplementSurvey(surveyId) {
+        if (!currentUser) {
+            alert('Please log in first');
+            return;
+        }
+
+        ajaxPost({
+            action: 'cp_get_supplement_survey',
+            survey_id: surveyId,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            var survey = response.data.survey;
+            loadUserCommentsAndRender(survey);
+        }, function(error) {
+            alert('Failed to load survey: ' + error);
+            if (window.cpExitSurvey) window.cpExitSurvey();
+        });
+    }
 
     /**
      * Load supplement surveys assigned to user
@@ -141,9 +182,9 @@
     };
 
     /**
-     * Load user's existing comments for the survey
+     * Load user's existing comments and render the survey form
      */
-    function loadUserComments(survey) {
+    function loadUserCommentsAndRender(survey) {
         if (!currentUser) {
             console.error('No current user set');
             return;
@@ -167,7 +208,7 @@
      * Render supplement survey with all supplements
      */
     function renderSupplementSurvey(survey, existingComments) {
-        var container = document.getElementById('supplement-survey-form-container');
+        var container = document.getElementById('survey-detail-view');
         if (!container) return;
 
         var html = '';
@@ -231,7 +272,9 @@
         var backBtn = container.querySelector('.back-to-surveys-btn');
         if (backBtn) {
             backBtn.addEventListener('click', function() {
-                hideSupplementSurveyForm();
+                if (window.cpExitSurvey) {
+                    window.cpExitSurvey();
+                }
             });
         }
     }

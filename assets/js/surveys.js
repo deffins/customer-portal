@@ -11,7 +11,7 @@
     var answers = {};
 
     /**
-     * Display surveys list
+     * Display surveys list (including supplement surveys)
      */
     window.cpDisplaySurveys = function(surveys) {
         var container = document.getElementById('surveys-container');
@@ -22,22 +22,8 @@
             return;
         }
 
-        // Filter out supplement surveys (they will be handled separately)
-        var regularSurveys = [];
-        surveys.forEach(function(survey) {
-            // Skip surveys with IDs starting with "supplement_"
-            if (!survey.survey_id || survey.survey_id.indexOf('supplement_') !== 0) {
-                regularSurveys.push(survey);
-            }
-        });
-
-        if (regularSurveys.length === 0) {
-            container.innerHTML = '<p>No surveys assigned yet.</p>';
-            return;
-        }
-
         var html = '<div class="surveys-list">';
-        regularSurveys.forEach(function(survey) {
+        surveys.forEach(function(survey) {
             var statusLabel = survey.status === 'completed' ? 'Completed' : 'Not Started';
             var statusClass = survey.status === 'completed' ? 'completed' : 'pending';
             var lastCompletedText = '';
@@ -48,7 +34,9 @@
 
             html += '<div class="survey-card">';
             html += '<h4>' + escapeHtml(survey.title) + '</h4>';
-            html += '<p class="survey-description">' + escapeHtml(survey.description) + '</p>';
+            if (survey.description) {
+                html += '<p class="survey-description">' + escapeHtml(survey.description) + '</p>';
+            }
             html += '<div class="survey-status ' + statusClass + '">' + statusLabel + '</div>';
             html += lastCompletedText;
             html += '<button class="button button-primary start-survey-btn" data-survey-id="' + escapeHtml(survey.survey_id) + '">Start Survey</button>';
@@ -72,7 +60,17 @@
      * Start a survey
      */
     function startSurvey(surveyId) {
-        // Fetch survey definition
+        // Check if this is a supplement survey
+        if (surveyId && surveyId.indexOf('supplement_') === 0) {
+            // This is a supplement survey - use supplement feedback module
+            var numericId = parseInt(surveyId.replace('supplement_', ''));
+            if (window.cpStartSupplementSurvey) {
+                window.cpStartSupplementSurvey(numericId);
+            }
+            return;
+        }
+
+        // Regular survey - fetch definition
         ajaxPost({
             action: 'cp_get_survey_definition',
             survey_id: surveyId,
@@ -91,9 +89,8 @@
      * Show survey wizard
      */
     function showSurveyWizard() {
-        document.getElementById('surveys-container').style.display = 'none';
-        var wizard = document.getElementById('survey-wizard');
-        wizard.style.display = 'block';
+        document.getElementById('surveys-list-view').style.display = 'none';
+        document.getElementById('survey-detail-view').style.display = 'block';
         renderQuestion();
     }
 
@@ -104,7 +101,7 @@
         if (!currentSurvey || !currentSurvey.questions) return;
 
         var question = currentSurvey.questions[currentQuestionIndex];
-        var wizard = document.getElementById('survey-wizard');
+        var wizard = document.getElementById('survey-detail-view');
 
         var totalQuestions = currentSurvey.questions.length;
         var progressPercent = Math.round((currentQuestionIndex / totalQuestions) * 100);
@@ -313,12 +310,15 @@
      * Exit survey
      */
     function exitSurvey() {
-        document.getElementById('survey-wizard').style.display = 'none';
-        document.getElementById('surveys-container').style.display = 'block';
+        document.getElementById('survey-detail-view').style.display = 'none';
+        document.getElementById('surveys-list-view').style.display = 'block';
         currentSurvey = null;
         currentQuestionIndex = 0;
         answers = {};
     }
+
+    // Expose exitSurvey globally for supplement surveys
+    window.cpExitSurvey = exitSurvey;
 
     /**
      * AJAX helper
