@@ -303,7 +303,7 @@
      * Attach event listeners to supplement buttons
      */
     function attachSupplementEventListeners(survey) {
-        var container = document.getElementById('supplement-surveys-container');
+        var container = document.getElementById('survey-detail-view');
 
         // Add comment buttons
         var addButtons = container.querySelectorAll('.add-comment-btn');
