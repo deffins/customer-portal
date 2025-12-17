@@ -990,6 +990,19 @@ class CP_Database {
     }
 
     /**
+     * Delete a supplement comment
+     */
+    public function delete_supplement_comment($user_id, $supplement_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_supplement_comments';
+
+        return $wpdb->delete($table, array(
+            'user_id' => $user_id,
+            'supplement_id' => $supplement_id
+        ));
+    }
+
+    /**
      * Get user's comments for a survey
      */
     public function get_user_supplement_comments($user_id, $survey_id) {

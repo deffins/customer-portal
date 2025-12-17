@@ -57,6 +57,8 @@ class CP_Ajax {
         add_action('wp_ajax_nopriv_cp_save_supplement_comment', array($this, 'save_supplement_comment'));
         add_action('wp_ajax_cp_get_user_supplement_comments', array($this, 'get_user_supplement_comments'));
         add_action('wp_ajax_nopriv_cp_get_user_supplement_comments', array($this, 'get_user_supplement_comments'));
+        add_action('wp_ajax_cp_delete_supplement_comment', array($this, 'delete_supplement_comment'));
+        add_action('wp_ajax_nopriv_cp_delete_supplement_comment', array($this, 'delete_supplement_comment'));
     }
     
     /**
@@ -946,6 +948,44 @@ class CP_Ajax {
             wp_send_json_success(array('message' => 'Comment saved!'));
         } else {
             wp_send_json_error(array('message' => 'Failed to save comment'));
+        }
+    }
+
+    /**
+     * Delete supplement comment
+     */
+    public function delete_supplement_comment() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['supplement_id'])) {
+            wp_send_json_error(array('message' => 'Missing supplement_id'));
+            return;
+        }
+
+        $supplement_id = intval($_POST['supplement_id']);
+
+        // Accept either user_id or telegram_id
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if (!$user) {
+                wp_send_json_error(array('message' => 'User not found'));
+                return;
+            }
+            $user_id = $user->id;
+        } elseif (isset($_POST['user_id'])) {
+            $user_id = intval($_POST['user_id']);
+        } else {
+            wp_send_json_error(array('message' => 'Missing user_id or telegram_id'));
+            return;
+        }
+
+        $result = CP()->database->delete_supplement_comment($user_id, $supplement_id);
+
+        if ($result !== false) {
+            wp_send_json_success(array('message' => 'Comment deleted!'));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to delete comment'));
         }
     }
 

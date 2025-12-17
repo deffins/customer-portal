@@ -397,16 +397,38 @@
 
         var commentText = textarea.value.trim();
 
-        if (!commentText) {
-            alert('Please enter a comment');
-            return;
-        }
-
         // Show loading state
         var saveBtn = editor.querySelector('.save-comment-btn');
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.textContent = 'Saving...';
+        }
+
+        // If comment is empty, delete it
+        if (!commentText) {
+            ajaxPost({
+                action: 'cp_delete_supplement_comment',
+                survey_id: surveyId,
+                supplement_id: supplementId,
+                telegram_id: telegramId,
+                nonce: CONFIG.nonce
+            }, function(response) {
+                // Remove comment from UI
+                deleteCommentDisplay(supplementId);
+                hideCommentEditor(supplementId);
+                showNotification('Comment deleted successfully!', 'success');
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                }
+            }, function(error) {
+                alert('Failed to delete comment: ' + error);
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                }
+            });
+            return;
         }
 
         ajaxPost({
@@ -467,6 +489,39 @@
 
         display.innerHTML = '<p>' + escapeHtml(commentText).replace(/\n/g, '<br>') + '</p>';
         display.style.display = 'block';
+    }
+
+    /**
+     * Delete comment display after deletion
+     */
+    function deleteCommentDisplay(supplementId) {
+        var item = document.querySelector('.supplement-item[data-supplement-id="' + supplementId + '"]');
+        if (!item) return;
+
+        var header = item.querySelector('.supplement-header');
+        var display = document.getElementById('comment-display-' + supplementId);
+
+        // Update button from "Edit" to "Add"
+        var editBtn = header.querySelector('.edit-comment-btn');
+        if (editBtn) {
+            editBtn.className = 'button button-small button-primary add-comment-btn';
+            editBtn.textContent = 'Add comment';
+            editBtn.setAttribute('data-supplement-id', supplementId);
+        }
+
+        // Remove comment display
+        if (display) {
+            display.remove();
+        }
+
+        // Clear textarea
+        var editor = document.getElementById('comment-editor-' + supplementId);
+        if (editor) {
+            var textarea = editor.querySelector('textarea');
+            if (textarea) {
+                textarea.value = '';
+            }
+        }
     }
 
     /**
