@@ -1,5 +1,5 @@
 /**
- * Supplement Feedback Module JavaScript
+ * Supplement Feedback Module JavaScript - V2 (Mobile-first + Append Notes)
  */
 
 (function() {
@@ -7,13 +7,16 @@
 
     var CONFIG = window.cpConfig || {};
     var currentUser = null;
+    var currentSurvey = null;
+    var currentSupplementIndex = 0;
+    var autosaveTimer = null;
+    var lastSavedText = '';
 
     /**
      * Initialize supplement feedback
      */
     window.cpInitSupplementFeedback = function(user) {
         currentUser = user;
-        // No longer auto-loading separate section
     };
 
     /**
@@ -32,13 +35,13 @@
         }
 
         // Load the survey
-        loadAndDisplaySupplementSurvey(surveyId);
+        loadSupplementSurveyV2(surveyId);
     };
 
     /**
-     * Load and display a specific supplement survey
+     * Load supplement survey with V2 endpoint
      */
-    function loadAndDisplaySupplementSurvey(surveyId) {
+    function loadSupplementSurveyV2(surveyId) {
         var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
         if (!telegramId) {
             alert('Please log in first');
@@ -47,12 +50,13 @@
         }
 
         ajaxPost({
-            action: 'cp_get_supplement_survey',
+            action: 'cp_get_supplement_survey_v2',
             survey_id: surveyId,
+            telegram_id: telegramId,
             nonce: CONFIG.nonce
         }, function(response) {
-            var survey = response.data.survey;
-            loadUserCommentsAndRender(survey, telegramId);
+            currentSurvey = response.data.survey;
+            showSupplementListView();
         }, function(error) {
             alert('Failed to load survey: ' + error);
             if (window.cpExitSurvey) window.cpExitSurvey();
@@ -60,468 +64,420 @@
     }
 
     /**
-     * Load supplement surveys assigned to user
+     * SUPPLEMENT SURVEY LIST VIEW
+     * Shows all supplements with completion indicators
      */
-    function loadSupplementSurveys() {
-        var container = document.getElementById('supplement-surveys-container');
-        if (!container) return;
-
-        if (!currentUser) {
-            container.innerHTML = '<p>Please log in to view supplement surveys.</p>';
-            return;
-        }
-
-        container.innerHTML = '<p>Loading supplement surveys...</p>';
-
-        // Get assignments that match supplement_feedback type
-        ajaxPost({
-            action: 'cp_get_assigned_surveys',
-            telegram_id: currentUser.id,
-            nonce: CONFIG.nonce
-        }, function(response) {
-            // Filter for supplement_feedback type surveys and get survey details
-            var supplementSurveys = [];
-            if (response.data && response.data.surveys) {
-                response.data.surveys.forEach(function(assignment) {
-                    // Check if this is a supplement feedback survey (survey_id will be like "supplement_1")
-                    if (assignment.survey_id && assignment.survey_id.indexOf('supplement_') === 0) {
-                        var surveyId = parseInt(assignment.survey_id.replace('supplement_', ''));
-                        if (!isNaN(surveyId)) {
-                            supplementSurveys.push({
-                                id: surveyId,
-                                title: assignment.title || 'Supplement Survey',
-                                status: assignment.status || 'Not Started'
-                            });
-                        }
-                    }
-                });
-            }
-
-            if (supplementSurveys.length > 0) {
-                displaySupplementSurveysList(supplementSurveys);
-            } else {
-                // Hide the entire supplement surveys section if no surveys are assigned
-                var section = document.getElementById('supplement-surveys-section');
-                if (section) {
-                    section.style.display = 'none';
-                }
-            }
-        }, function(error) {
-            console.error('Failed to load assignments:', error);
-            container.innerHTML = '<p>Error loading supplement surveys.</p>';
-        });
-    }
-
-    /**
-     * Display list of supplement surveys as clickable cards
-     */
-    function displaySupplementSurveysList(surveys) {
-        var container = document.getElementById('supplement-surveys-container');
-        if (!container) return;
-
-        var html = '<div class="supplement-surveys-list">';
-        surveys.forEach(function(survey) {
-            var statusLabel = survey.status === 'completed' ? 'Completed' : 'Not Started';
-            var statusClass = survey.status === 'completed' ? 'completed' : 'pending';
-
-            html += '<div class="survey-card supplement-survey-card" data-survey-id="' + survey.id + '">';
-            html += '<h4>' + escapeHtml(survey.title) + '</h4>';
-            html += '<div class="survey-status ' + statusClass + '">' + statusLabel + '</div>';
-            html += '<button class="button button-primary start-supplement-survey-btn" data-survey-id="' + survey.id + '">Start Survey</button>';
-            html += '</div>';
-        });
-        html += '</div>';
-
-        // Add hidden container for the survey form
-        html += '<div id="supplement-survey-form-container" style="display: none;"></div>';
-
-        container.innerHTML = html;
-
-        // Attach event listeners to survey buttons
-        var startButtons = container.querySelectorAll('.start-supplement-survey-btn');
-        for (var i = 0; i < startButtons.length; i++) {
-            startButtons[i].addEventListener('click', function() {
-                var surveyId = parseInt(this.getAttribute('data-survey-id'));
-                showSupplementSurveyForm(surveyId);
-            });
-        }
-    }
-
-    /**
-     * Show the supplement survey feedback form
-     */
-    function showSupplementSurveyForm(surveyId) {
-        // Hide the surveys list
-        var listContainer = document.querySelector('.supplement-surveys-list');
-        if (listContainer) {
-            listContainer.style.display = 'none';
-        }
-
-        // Show the form container
-        var formContainer = document.getElementById('supplement-survey-form-container');
-        if (formContainer) {
-            formContainer.style.display = 'block';
-        }
-
-        // Load the survey
-        cpDisplaySupplementSurvey(surveyId);
-    }
-
-    /**
-     * Display a supplement feedback survey
-     */
-    window.cpDisplaySupplementSurvey = function(surveyId) {
-        ajaxPost({
-            action: 'cp_get_supplement_survey',
-            survey_id: surveyId,
-            nonce: CONFIG.nonce
-        }, function(response) {
-            var survey = response.data.survey;
-            loadUserComments(survey);
-        }, function(error) {
-            alert('Failed to load survey: ' + error);
-        });
-    };
-
-    /**
-     * Load user's existing comments and render the survey form
-     */
-    function loadUserCommentsAndRender(survey, telegramId) {
-        if (!telegramId) {
-            console.error('No telegram ID provided');
-            renderSupplementSurvey(survey, {});
-            return;
-        }
-
-        ajaxPost({
-            action: 'cp_get_user_supplement_comments',
-            survey_id: survey.id,
-            telegram_id: telegramId,
-            nonce: CONFIG.nonce
-        }, function(response) {
-            var comments = response.data && response.data.comments ? response.data.comments : {};
-            renderSupplementSurvey(survey, comments);
-        }, function(error) {
-            console.error('Failed to load comments:', error);
-            renderSupplementSurvey(survey, {});
-        });
-    }
-
-    /**
-     * Render supplement survey with all supplements
-     */
-    function renderSupplementSurvey(survey, existingComments) {
+    function showSupplementListView() {
         var container = document.getElementById('survey-detail-view');
-        if (!container) return;
+        if (!container || !currentSurvey) return;
 
         var html = '';
-        html += '<div class="supplement-survey">';
+        html += '<div class="supplement-survey-v2">';
 
-        // Add back button
+        // Header
         html += '<button class="button back-to-surveys-btn" style="margin-bottom: 20px;">← Back to Surveys</button>';
+        html += '<h3>' + escapeHtml(currentSurvey.title) + '</h3>';
+        html += '<p class="supplement-survey-description">Tap a supplement to add feedback:</p>';
 
-        html += '<h3>' + escapeHtml(survey.title) + '</h3>';
-        html += '<p class="supplement-survey-description">Add your feedback for each supplement:</p>';
+        // Supplements list
+        html += '<div class="supplements-list-v2">';
 
-        html += '<div class="supplements-list">';
-
-        if (!survey.supplements || survey.supplements.length === 0) {
+        if (!currentSurvey.supplements || currentSurvey.supplements.length === 0) {
             html += '<p>No supplements in this survey.</p>';
         } else {
-            survey.supplements.forEach(function(supplement) {
-                var hasComment = existingComments.hasOwnProperty(supplement.id);
-                var commentText = hasComment ? existingComments[supplement.id] : '';
+            currentSurvey.supplements.forEach(function(supplement, index) {
+                var hasNotes = supplement.has_notes || false;
+                var lastNotePreview = '';
 
-                html += '<div class="supplement-item" data-supplement-id="' + supplement.id + '">';
-                html += '<div class="supplement-header">';
-                html += '<strong class="supplement-name">' + escapeHtml(supplement.name) + '</strong>';
-
-                if (hasComment) {
-                    html += '<button class="button button-small edit-comment-btn" data-supplement-id="' + supplement.id + '">Edit comment</button>';
-                } else {
-                    html += '<button class="button button-small button-primary add-comment-btn" data-supplement-id="' + supplement.id + '">Add comment</button>';
-                }
-                html += '</div>';
-
-                // Show existing comment if present
-                if (hasComment) {
-                    html += '<div class="supplement-comment-display" id="comment-display-' + supplement.id + '">';
-                    html += '<p>' + escapeHtml(commentText).replace(/\n/g, '<br>') + '</p>';
-                    html += '</div>';
+                if (hasNotes && supplement.notes && supplement.notes.length > 0) {
+                    var lastNote = supplement.notes[supplement.notes.length - 1];
+                    lastNotePreview = lastNote.text ? lastNote.text.substring(0, 60) + (lastNote.text.length > 60 ? '...' : '') : '';
                 }
 
-                // Comment editor (hidden by default)
-                html += '<div class="supplement-comment-editor" id="comment-editor-' + supplement.id + '" style="display: none;">';
-                html += '<textarea class="supplement-comment-textarea" rows="4" placeholder="Enter your feedback...">' + escapeHtml(commentText) + '</textarea>';
-                html += '<div class="comment-actions">';
-                html += '<button class="button button-primary save-comment-btn" data-supplement-id="' + supplement.id + '" data-survey-id="' + survey.id + '">Save</button>';
-                html += '<button class="button cancel-comment-btn" data-supplement-id="' + supplement.id + '">Cancel</button>';
-                html += '</div>';
-                html += '</div>';
+                html += '<div class="supplement-list-item" data-index="' + index + '">';
+                html += '<div class="supplement-list-header">';
+                html += '<div class="supplement-status-indicator ' + (hasNotes ? 'has-notes' : 'no-notes') + '"></div>';
+                html += '<div class="supplement-list-content">';
+                html += '<strong class="supplement-list-name">' + escapeHtml(supplement.name) + '</strong>';
 
-                html += '</div>'; // .supplement-item
+                if (lastNotePreview) {
+                    html += '<p class="supplement-list-preview">' + escapeHtml(lastNotePreview) + '</p>';
+                }
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
             });
         }
 
-        html += '</div>'; // .supplements-list
-        html += '</div>'; // .supplement-survey
+        html += '</div>'; // .supplements-list-v2
+
+        // Bottom actions
+        html += '<div class="supplement-list-actions">';
+        html += '<button class="button button-primary finish-survey-btn">Finish & Notify</button>';
+        html += '</div>';
+
+        html += '</div>'; // .supplement-survey-v2
 
         container.innerHTML = html;
 
         // Attach event listeners
-        attachSupplementEventListeners(survey);
+        attachListViewListeners();
+    }
 
-        // Attach back button listener
+    /**
+     * Attach event listeners for list view
+     */
+    function attachListViewListeners() {
+        var container = document.getElementById('survey-detail-view');
+        if (!container) return;
+
+        // Back button
         var backBtn = container.querySelector('.back-to-surveys-btn');
         if (backBtn) {
             backBtn.addEventListener('click', function() {
-                if (window.cpExitSurvey) {
-                    window.cpExitSurvey();
-                }
+                if (window.cpExitSurvey) window.cpExitSurvey();
             });
         }
-    }
 
-    /**
-     * Hide the supplement survey form and show the surveys list
-     */
-    function hideSupplementSurveyForm() {
-        // Hide the form container
-        var formContainer = document.getElementById('supplement-survey-form-container');
-        if (formContainer) {
-            formContainer.style.display = 'none';
+        // Supplement items - click to open detail view
+        var items = container.querySelectorAll('.supplement-list-item');
+        for (var i = 0; i < items.length; i++) {
+            items[i].addEventListener('click', function() {
+                var index = parseInt(this.getAttribute('data-index'));
+                showSupplementDetailView(index);
+            });
         }
 
-        // Show the surveys list
-        var listContainer = document.querySelector('.supplement-surveys-list');
-        if (listContainer) {
-            listContainer.style.display = 'block';
+        // Finish & Notify button
+        var finishBtn = container.querySelector('.finish-survey-btn');
+        if (finishBtn) {
+            finishBtn.addEventListener('click', submitSupplementSurvey);
         }
     }
 
     /**
-     * Attach event listeners to supplement buttons
+     * PRODUCT DETAIL VIEW
+     * One supplement per screen with autosave
      */
-    function attachSupplementEventListeners(survey) {
+    function showSupplementDetailView(index) {
+        currentSupplementIndex = index;
+        var supplement = currentSurvey.supplements[index];
+        if (!supplement) return;
+
         var container = document.getElementById('survey-detail-view');
+        if (!container) return;
 
-        // Add comment buttons
-        var addButtons = container.querySelectorAll('.add-comment-btn');
-        for (var i = 0; i < addButtons.length; i++) {
-            addButtons[i].addEventListener('click', function() {
-                var supplementId = this.getAttribute('data-supplement-id');
-                showCommentEditor(supplementId);
+        var html = '';
+        html += '<div class="supplement-detail-view">';
+
+        // Header with back button
+        html += '<div class="supplement-detail-header">';
+        html += '<button class="button back-to-list-btn">← Back to list</button>';
+        html += '</div>';
+
+        // Progress bar
+        html += '<div class="supplement-progress-bar">';
+        for (var i = 0; i < currentSurvey.supplements.length; i++) {
+            var hasNotes = currentSurvey.supplements[i].has_notes || false;
+            var isActive = i === index;
+            var segmentClass = 'progress-segment';
+            if (hasNotes) segmentClass += ' completed';
+            if (isActive) segmentClass += ' active';
+            html += '<div class="' + segmentClass + '"></div>';
+        }
+        html += '</div>';
+
+        // Supplement name and context
+        html += '<div class="supplement-detail-content">';
+        html += '<h3 class="supplement-detail-name">' + escapeHtml(supplement.name) + '</h3>';
+
+        if (supplement.admin_context) {
+            html += '<div class="supplement-admin-context">';
+            html += '<p>' + escapeHtml(supplement.admin_context) + '</p>';
+            html += '</div>';
+        }
+
+        // Textarea for note
+        html += '<div class="supplement-note-editor">';
+        html += '<textarea id="supplement-note-textarea" class="supplement-note-textarea" rows="8" ';
+        html += 'placeholder="Jūtams efekts? Slikta reakcija? Cik ilgi lieto? Cik daudz?"></textarea>';
+        html += '<div class="autosave-indicator" id="autosave-indicator" style="display: none;">';
+        html += '<span class="autosave-text">Saved ✓</span>';
+        html += '</div>';
+        html += '</div>';
+
+        // Show existing notes (read-only)
+        if (supplement.notes && supplement.notes.length > 0) {
+            html += '<div class="supplement-existing-notes">';
+            html += '<h4>Previous notes:</h4>';
+            supplement.notes.forEach(function(note) {
+                var noteDate = note.created_at ? new Date(note.created_at).toLocaleDateString() : '';
+                html += '<div class="existing-note">';
+                html += '<div class="existing-note-meta">' + noteDate + '</div>';
+                html += '<div class="existing-note-text">' + escapeHtml(note.text).replace(/\n/g, '<br>') + '</div>';
+                html += '</div>';
             });
+            html += '</div>';
         }
 
-        // Edit comment buttons
-        var editButtons = container.querySelectorAll('.edit-comment-btn');
-        for (var i = 0; i < editButtons.length; i++) {
-            editButtons[i].addEventListener('click', function() {
-                var supplementId = this.getAttribute('data-supplement-id');
-                showCommentEditor(supplementId);
-            });
-        }
+        // Navigation buttons
+        html += '<div class="supplement-detail-actions">';
+        var hasText = supplement.notes && supplement.notes.length > 0;
+        var isLast = index === currentSurvey.supplements.length - 1;
 
-        // Save comment buttons
-        var saveButtons = container.querySelectorAll('.save-comment-btn');
-        for (var i = 0; i < saveButtons.length; i++) {
-            saveButtons[i].addEventListener('click', function() {
-                var supplementId = this.getAttribute('data-supplement-id');
-                var surveyId = this.getAttribute('data-survey-id');
-                saveComment(surveyId, supplementId);
-            });
+        if (hasText) {
+            html += '<button class="button button-primary save-and-next-btn">Save and next</button>';
+        } else {
+            html += '<button class="button skip-and-next-btn">Skip and next</button>';
         }
+        html += '</div>';
 
-        // Cancel buttons
-        var cancelButtons = container.querySelectorAll('.cancel-comment-btn');
-        for (var i = 0; i < cancelButtons.length; i++) {
-            cancelButtons[i].addEventListener('click', function() {
-                var supplementId = this.getAttribute('data-supplement-id');
-                hideCommentEditor(supplementId);
-            });
-        }
-    }
+        html += '</div>'; // .supplement-detail-content
+        html += '</div>'; // .supplement-detail-view
 
-    /**
-     * Show comment editor for a supplement
-     */
-    function showCommentEditor(supplementId) {
-        var editor = document.getElementById('comment-editor-' + supplementId);
-        var display = document.getElementById('comment-display-' + supplementId);
+        container.innerHTML = html;
 
-        if (editor) {
-            editor.style.display = 'block';
-        }
-        if (display) {
-            display.style.display = 'none';
-        }
+        // Attach event listeners
+        attachDetailViewListeners();
 
-        // Focus on textarea
-        var textarea = editor ? editor.querySelector('textarea') : null;
+        // Focus textarea
+        var textarea = document.getElementById('supplement-note-textarea');
         if (textarea) {
             textarea.focus();
         }
     }
 
     /**
-     * Hide comment editor for a supplement
+     * Attach event listeners for detail view
      */
-    function hideCommentEditor(supplementId) {
-        var editor = document.getElementById('comment-editor-' + supplementId);
-        var display = document.getElementById('comment-display-' + supplementId);
+    function attachDetailViewListeners() {
+        var container = document.getElementById('survey-detail-view');
+        if (!container) return;
 
-        if (editor) {
-            editor.style.display = 'none';
+        // Back to list button
+        var backBtn = container.querySelector('.back-to-list-btn');
+        if (backBtn) {
+            backBtn.addEventListener('click', function() {
+                clearAutosaveTimer();
+                showSupplementListView();
+            });
         }
-        if (display) {
-            display.style.display = 'block';
+
+        // Textarea autosave
+        var textarea = document.getElementById('supplement-note-textarea');
+        if (textarea) {
+            // Save on blur
+            textarea.addEventListener('blur', function() {
+                autosaveNote();
+            });
+
+            // Save on typing (debounced)
+            textarea.addEventListener('input', function() {
+                scheduleAutosave();
+                updateNavigationButton();
+            });
+        }
+
+        // Navigation buttons
+        var saveNextBtn = container.querySelector('.save-and-next-btn');
+        var skipNextBtn = container.querySelector('.skip-and-next-btn');
+
+        if (saveNextBtn) {
+            saveNextBtn.addEventListener('click', saveAndNavigateNext);
+        }
+
+        if (skipNextBtn) {
+            skipNextBtn.addEventListener('click', skipAndNavigateNext);
         }
     }
 
     /**
-     * Save comment for a supplement
+     * Update navigation button based on textarea content
      */
-    function saveComment(surveyId, supplementId) {
+    function updateNavigationButton() {
+        var textarea = document.getElementById('supplement-note-textarea');
+        var container = document.getElementById('survey-detail-view');
+        if (!textarea || !container) return;
+
+        var hasText = textarea.value.trim().length > 0;
+        var actions = container.querySelector('.supplement-detail-actions');
+        if (!actions) return;
+
+        var isLast = currentSupplementIndex === currentSurvey.supplements.length - 1;
+
+        if (hasText) {
+            actions.innerHTML = '<button class="button button-primary save-and-next-btn">' +
+                (isLast ? 'Save and finish' : 'Save and next') + '</button>';
+            var btn = actions.querySelector('.save-and-next-btn');
+            if (btn) btn.addEventListener('click', saveAndNavigateNext);
+        } else {
+            actions.innerHTML = '<button class="button skip-and-next-btn">' +
+                (isLast ? 'Finish' : 'Skip and next') + '</button>';
+            var btn = actions.querySelector('.skip-and-next-btn');
+            if (btn) btn.addEventListener('click', skipAndNavigateNext);
+        }
+    }
+
+    /**
+     * Schedule autosave (debounced)
+     */
+    function scheduleAutosave() {
+        clearAutosaveTimer();
+        autosaveTimer = setTimeout(function() {
+            autosaveNote();
+        }, 500); // 500ms debounce
+    }
+
+    /**
+     * Clear autosave timer
+     */
+    function clearAutosaveTimer() {
+        if (autosaveTimer) {
+            clearTimeout(autosaveTimer);
+            autosaveTimer = null;
+        }
+    }
+
+    /**
+     * Autosave note
+     */
+    function autosaveNote() {
+        clearAutosaveTimer();
+
+        var textarea = document.getElementById('supplement-note-textarea');
+        if (!textarea) return;
+
+        var noteText = textarea.value.trim();
+
+        // Don't save if text hasn't changed
+        if (noteText === lastSavedText) return;
+
+        // Don't save empty notes via autosave
+        if (!noteText) return;
+
+        lastSavedText = noteText;
+
+        var supplement = currentSurvey.supplements[currentSupplementIndex];
+        if (!supplement) return;
+
+        saveSupplementNote(supplement.id, noteText, function() {
+            showAutosaveIndicator();
+            // Update survey data (mark as having notes)
+            supplement.has_notes = true;
+        });
+    }
+
+    /**
+     * Show "Saved ✓" indicator briefly
+     */
+    function showAutosaveIndicator() {
+        var indicator = document.getElementById('autosave-indicator');
+        if (!indicator) return;
+
+        indicator.style.display = 'block';
+        setTimeout(function() {
+            indicator.style.display = 'none';
+        }, 2000);
+    }
+
+    /**
+     * Save and navigate to next supplement
+     */
+    function saveAndNavigateNext() {
+        var textarea = document.getElementById('supplement-note-textarea');
+        if (!textarea) return;
+
+        var noteText = textarea.value.trim();
+        var supplement = currentSurvey.supplements[currentSupplementIndex];
+        if (!supplement) return;
+
+        if (noteText) {
+            // Save note and navigate
+            saveSupplementNote(supplement.id, noteText, function() {
+                supplement.has_notes = true;
+                navigateNext();
+            });
+        } else {
+            navigateNext();
+        }
+    }
+
+    /**
+     * Skip and navigate to next supplement
+     */
+    function skipAndNavigateNext() {
+        navigateNext();
+    }
+
+    /**
+     * Navigate to next supplement or return to list
+     */
+    function navigateNext() {
+        clearAutosaveTimer();
+        lastSavedText = '';
+
+        if (currentSupplementIndex < currentSurvey.supplements.length - 1) {
+            // Go to next supplement
+            showSupplementDetailView(currentSupplementIndex + 1);
+        } else {
+            // Last supplement - return to list view
+            showSupplementListView();
+        }
+    }
+
+    /**
+     * Save supplement note via AJAX
+     */
+    function saveSupplementNote(supplementId, noteText, callback) {
         var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
         if (!telegramId) {
             alert('User not authenticated');
             return;
         }
 
-        var editor = document.getElementById('comment-editor-' + supplementId);
-        if (!editor) return;
-
-        var textarea = editor.querySelector('textarea');
-        if (!textarea) return;
-
-        var commentText = textarea.value.trim();
-
-        // Show loading state
-        var saveBtn = editor.querySelector('.save-comment-btn');
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-        }
-
-        // If comment is empty, delete it
-        if (!commentText) {
-            ajaxPost({
-                action: 'cp_delete_supplement_comment',
-                survey_id: surveyId,
-                supplement_id: supplementId,
-                telegram_id: telegramId,
-                nonce: CONFIG.nonce
-            }, function(response) {
-                // Remove comment from UI
-                deleteCommentDisplay(supplementId);
-                hideCommentEditor(supplementId);
-                showNotification('Comment deleted successfully!', 'success');
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save';
-                }
-            }, function(error) {
-                alert('Failed to delete comment: ' + error);
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save';
-                }
-            });
-            return;
-        }
-
         ajaxPost({
-            action: 'cp_save_supplement_comment',
-            survey_id: surveyId,
+            action: 'cp_add_supplement_note',
+            survey_id: currentSurvey.id,
             supplement_id: supplementId,
             telegram_id: telegramId,
-            comment_text: commentText,
+            note_text: noteText,
+            note_type: 'note',
             nonce: CONFIG.nonce
         }, function(response) {
-            // Update UI to show saved comment
-            updateCommentDisplay(supplementId, commentText);
-            hideCommentEditor(supplementId);
-
-            // Show success message
-            showNotification('Comment saved successfully!', 'success');
-
-            // Reset button
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save';
-            }
+            if (callback) callback();
         }, function(error) {
-            alert('Failed to save comment: ' + error);
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save';
-            }
+            console.error('Failed to save note:', error);
         });
     }
 
     /**
-     * Update comment display after saving
+     * Submit survey (mark as submitted)
      */
-    function updateCommentDisplay(supplementId, commentText) {
-        var item = document.querySelector('.supplement-item[data-supplement-id="' + supplementId + '"]');
-        if (!item) return;
-
-        var header = item.querySelector('.supplement-header');
-        var display = document.getElementById('comment-display-' + supplementId);
-
-        // Update button from "Add" to "Edit"
-        var addBtn = header.querySelector('.add-comment-btn');
-        if (addBtn) {
-            addBtn.className = 'button button-small edit-comment-btn';
-            addBtn.textContent = 'Edit comment';
-            addBtn.setAttribute('data-supplement-id', supplementId);
+    function submitSupplementSurvey() {
+        var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
+        if (!telegramId) {
+            alert('User not authenticated');
+            return;
         }
 
-        // Update or create comment display
-        if (!display) {
-            display = document.createElement('div');
-            display.className = 'supplement-comment-display';
-            display.id = 'comment-display-' + supplementId;
-            var editor = document.getElementById('comment-editor-' + supplementId);
-            item.insertBefore(display, editor);
+        if (!confirm('Submit this survey? This will notify the admin.')) {
+            return;
         }
 
-        display.innerHTML = '<p>' + escapeHtml(commentText).replace(/\n/g, '<br>') + '</p>';
-        display.style.display = 'block';
-    }
-
-    /**
-     * Delete comment display after deletion
-     */
-    function deleteCommentDisplay(supplementId) {
-        var item = document.querySelector('.supplement-item[data-supplement-id="' + supplementId + '"]');
-        if (!item) return;
-
-        var header = item.querySelector('.supplement-header');
-        var display = document.getElementById('comment-display-' + supplementId);
-
-        // Update button from "Edit" to "Add"
-        var editBtn = header.querySelector('.edit-comment-btn');
-        if (editBtn) {
-            editBtn.className = 'button button-small button-primary add-comment-btn';
-            editBtn.textContent = 'Add comment';
-            editBtn.setAttribute('data-supplement-id', supplementId);
-        }
-
-        // Remove comment display
-        if (display) {
-            display.remove();
-        }
-
-        // Clear textarea
-        var editor = document.getElementById('comment-editor-' + supplementId);
-        if (editor) {
-            var textarea = editor.querySelector('textarea');
-            if (textarea) {
-                textarea.value = '';
-            }
-        }
+        ajaxPost({
+            action: 'cp_submit_supplement_survey',
+            survey_id: currentSurvey.id,
+            telegram_id: telegramId,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            showNotification('Survey submitted successfully!', 'success');
+            setTimeout(function() {
+                if (window.cpExitSurvey) window.cpExitSurvey();
+            }, 1500);
+        }, function(error) {
+            alert('Failed to submit survey: ' + error);
+        });
     }
 
     /**
@@ -539,7 +495,9 @@
             notification.style.opacity = '0';
             notification.style.transition = 'opacity 0.3s';
             setTimeout(function() {
-                document.body.removeChild(notification);
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
             }, 300);
         }, 3000);
     }
