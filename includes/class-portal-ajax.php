@@ -50,7 +50,7 @@ class CP_Ajax {
         add_action('wp_ajax_cp_submit_survey', array($this, 'submit_survey'));
         add_action('wp_ajax_nopriv_cp_submit_survey', array($this, 'submit_survey'));
 
-        // Supplement Feedback
+        // Supplement Feedback (V1 - legacy)
         add_action('wp_ajax_cp_get_supplement_survey', array($this, 'get_supplement_survey'));
         add_action('wp_ajax_nopriv_cp_get_supplement_survey', array($this, 'get_supplement_survey'));
         add_action('wp_ajax_cp_save_supplement_comment', array($this, 'save_supplement_comment'));
@@ -59,6 +59,14 @@ class CP_Ajax {
         add_action('wp_ajax_nopriv_cp_get_user_supplement_comments', array($this, 'get_user_supplement_comments'));
         add_action('wp_ajax_cp_delete_supplement_comment', array($this, 'delete_supplement_comment'));
         add_action('wp_ajax_nopriv_cp_delete_supplement_comment', array($this, 'delete_supplement_comment'));
+
+        // Supplement Feedback V2 (append-only notes)
+        add_action('wp_ajax_cp_get_supplement_survey_v2', array($this, 'get_supplement_survey_v2'));
+        add_action('wp_ajax_nopriv_cp_get_supplement_survey_v2', array($this, 'get_supplement_survey_v2'));
+        add_action('wp_ajax_cp_add_supplement_note', array($this, 'add_supplement_note'));
+        add_action('wp_ajax_nopriv_cp_add_supplement_note', array($this, 'add_supplement_note'));
+        add_action('wp_ajax_cp_submit_supplement_survey', array($this, 'submit_supplement_survey'));
+        add_action('wp_ajax_nopriv_cp_submit_supplement_survey', array($this, 'submit_supplement_survey'));
     }
     
     /**
@@ -1029,5 +1037,154 @@ class CP_Ajax {
         wp_send_json_success(array(
             'comments' => $comments_map
         ));
+    }
+
+    /**
+     * SUPPLEMENT FEEDBACK V2 METHODS (Append-only notes)
+     */
+
+    /**
+     * Get supplement survey with V2 data (notes instead of comments)
+     */
+    public function get_supplement_survey_v2() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id'])) {
+            wp_send_json_error(array('message' => 'Missing survey_id'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+        $survey = CP()->database->get_supplement_survey($survey_id);
+
+        if (!$survey) {
+            wp_send_json_error(array('message' => 'Survey not found'));
+            return;
+        }
+
+        // Get user's existing notes if telegram_id provided
+        $notes_by_supplement = array();
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+
+            if ($user) {
+                $all_notes = CP()->database->get_user_supplement_notes($user->id, $survey_id);
+
+                // Group notes by supplement_id
+                foreach ($all_notes as $note) {
+                    if (!isset($notes_by_supplement[$note->supplement_id])) {
+                        $notes_by_supplement[$note->supplement_id] = array();
+                    }
+                    $notes_by_supplement[$note->supplement_id][] = array(
+                        'id' => $note->id,
+                        'text' => $note->note_text,
+                        'type' => $note->note_type,
+                        'created_at' => $note->created_at
+                    );
+                }
+            }
+        }
+
+        // Add notes to each supplement
+        foreach ($survey->supplements as $supplement) {
+            $supplement->notes = isset($notes_by_supplement[$supplement->id]) ? $notes_by_supplement[$supplement->id] : array();
+            $supplement->has_notes = !empty($supplement->notes);
+        }
+
+        wp_send_json_success(array(
+            'survey' => $survey
+        ));
+    }
+
+    /**
+     * Add a supplement note (append-only)
+     */
+    public function add_supplement_note() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id']) || !isset($_POST['supplement_id'])) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+        $supplement_id = intval($_POST['supplement_id']);
+        $note_text = isset($_POST['note_text']) ? sanitize_textarea_field($_POST['note_text']) : '';
+        $note_type = isset($_POST['note_type']) ? sanitize_text_field($_POST['note_type']) : 'note';
+
+        // Validate note_type
+        if (!in_array($note_type, array('note', 'followup'))) {
+            $note_type = 'note';
+        }
+
+        // Get user_id from telegram_id
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if (!$user) {
+                wp_send_json_error(array('message' => 'User not found'));
+                return;
+            }
+            $user_id = $user->id;
+        } elseif (isset($_POST['user_id'])) {
+            $user_id = intval($_POST['user_id']);
+        } else {
+            wp_send_json_error(array('message' => 'Missing user_id or telegram_id'));
+            return;
+        }
+
+        // Add note (append-only)
+        $note_id = CP()->database->add_supplement_note($survey_id, $supplement_id, $user_id, $note_text, $note_type);
+
+        if ($note_id) {
+            // Update survey status to 'in_progress' on first note
+            CP()->database->maybe_update_survey_status_in_progress($user_id, $survey_id);
+
+            wp_send_json_success(array(
+                'message' => 'Note saved!',
+                'note_id' => $note_id
+            ));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to save note'));
+        }
+    }
+
+    /**
+     * Submit supplement survey (mark as submitted)
+     */
+    public function submit_supplement_survey() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        if (!isset($_POST['survey_id'])) {
+            wp_send_json_error(array('message' => 'Missing survey_id'));
+            return;
+        }
+
+        $survey_id = intval($_POST['survey_id']);
+
+        // Get user_id from telegram_id
+        if (isset($_POST['telegram_id'])) {
+            $telegram_id = intval($_POST['telegram_id']);
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+            if (!$user) {
+                wp_send_json_error(array('message' => 'User not found'));
+                return;
+            }
+            $user_id = $user->id;
+        } elseif (isset($_POST['user_id'])) {
+            $user_id = intval($_POST['user_id']);
+        } else {
+            wp_send_json_error(array('message' => 'Missing user_id or telegram_id'));
+            return;
+        }
+
+        $result = CP()->database->submit_supplement_survey($user_id, $survey_id);
+
+        if ($result) {
+            wp_send_json_success(array('message' => 'Survey submitted!'));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to submit survey'));
+        }
     }
 }

@@ -10,6 +10,7 @@ class CP_Database {
     public function __construct() {
         // Ensure any new columns are present for existing installs
         $this->upgrade_user_schema();
+        $this->upgrade_supplement_survey_schema_v2();
     }
     
     /**
@@ -152,19 +153,20 @@ class CP_Database {
         ) $charset_collate;";
         dbDelta($sql_surveys);
 
-        // Survey supplements table
+        // Survey supplements table (V2 - with admin_context)
         $survey_supplements_table = $wpdb->prefix . 'cp_survey_supplements';
         $sql_survey_supplements = "CREATE TABLE {$survey_supplements_table} (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             survey_id mediumint(9) NOT NULL,
             name varchar(255) NOT NULL,
             sort_order int DEFAULT 0,
+            admin_context text,
             PRIMARY KEY (id),
             KEY survey_id (survey_id)
         ) $charset_collate;";
         dbDelta($sql_survey_supplements);
 
-        // Survey supplement comments table
+        // Survey supplement comments table (V1 - legacy, kept for backwards compatibility)
         $survey_supplement_comments_table = $wpdb->prefix . 'cp_survey_supplement_comments';
         $sql_survey_supplement_comments = "CREATE TABLE {$survey_supplement_comments_table} (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -181,6 +183,23 @@ class CP_Database {
             UNIQUE KEY user_supplement (user_id, supplement_id)
         ) $charset_collate;";
         dbDelta($sql_survey_supplement_comments);
+
+        // Survey supplement notes table (V2 - append-only notes)
+        $survey_supplement_notes_table = $wpdb->prefix . 'cp_survey_supplement_notes';
+        $sql_survey_supplement_notes = "CREATE TABLE {$survey_supplement_notes_table} (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            survey_id mediumint(9) NOT NULL,
+            supplement_id mediumint(9) NOT NULL,
+            user_id mediumint(9) NOT NULL,
+            note_text text,
+            note_type varchar(20) DEFAULT 'note',
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY user_supplement_time (user_id, supplement_id, created_at),
+            KEY survey_user (survey_id, user_id)
+        ) $charset_collate;";
+        dbDelta($sql_survey_supplement_notes);
 
         // Default options
         add_option('cp_telegram_bot_token', '');
@@ -845,6 +864,54 @@ class CP_Database {
     }
 
     /**
+     * Upgrade supplement survey schema to V2 (add admin_context column and create notes table)
+     */
+    private function upgrade_supplement_survey_schema_v2() {
+        global $wpdb;
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+        $notes_table = $wpdb->prefix . 'cp_survey_supplement_notes';
+
+        // Check if supplements table exists
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$supplements_table}'");
+        if (!$table_exists) {
+            return; // Table will be created by activate()
+        }
+
+        // Add admin_context column if missing
+        $column = $wpdb->get_var($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s AND COLUMN_NAME = 'admin_context'",
+            $supplements_table,
+            $wpdb->dbname
+        ));
+
+        if (!$column) {
+            $wpdb->query("ALTER TABLE {$supplements_table} ADD COLUMN admin_context text NULL AFTER sort_order");
+        }
+
+        // Create notes table if it doesn't exist
+        $notes_table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$notes_table}'");
+        if (!$notes_table_exists) {
+            $charset_collate = $wpdb->get_charset_collate();
+            $sql = "CREATE TABLE {$notes_table} (
+                id mediumint(9) NOT NULL AUTO_INCREMENT,
+                survey_id mediumint(9) NOT NULL,
+                supplement_id mediumint(9) NOT NULL,
+                user_id mediumint(9) NOT NULL,
+                note_text text,
+                note_type varchar(20) DEFAULT 'note',
+                created_at datetime DEFAULT CURRENT_TIMESTAMP,
+                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id),
+                KEY user_supplement_time (user_id, supplement_id, created_at),
+                KEY survey_user (survey_id, user_id)
+            ) $charset_collate;";
+
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            dbDelta($sql);
+        }
+    }
+
+    /**
      * SUPPLEMENT FEEDBACK SURVEY METHODS
      */
 
@@ -1057,5 +1124,130 @@ class CP_Database {
              ORDER BY u.first_name ASC",
             $survey_id
         ));
+    }
+
+    /**
+     * SUPPLEMENT FEEDBACK SURVEY V2 METHODS (Append-only notes)
+     */
+
+    /**
+     * Add a supplement note (append-only)
+     */
+    public function add_supplement_note($survey_id, $supplement_id, $user_id, $note_text, $note_type = 'note') {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_supplement_notes';
+
+        $result = $wpdb->insert($table, array(
+            'survey_id' => $survey_id,
+            'supplement_id' => $supplement_id,
+            'user_id' => $user_id,
+            'note_text' => $note_text,
+            'note_type' => $note_type
+        ));
+
+        return $result !== false ? $wpdb->insert_id : false;
+    }
+
+    /**
+     * Get all notes for a user's supplement (chronological)
+     */
+    public function get_supplement_notes($user_id, $supplement_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_supplement_notes';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE user_id = %d AND supplement_id = %d ORDER BY created_at ASC",
+            $user_id,
+            $supplement_id
+        ));
+    }
+
+    /**
+     * Get user's notes for a survey (all supplements)
+     */
+    public function get_user_supplement_notes($user_id, $survey_id) {
+        global $wpdb;
+        $notes_table = $wpdb->prefix . 'cp_survey_supplement_notes';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT n.*, s.name as supplement_name, s.sort_order, s.admin_context
+             FROM {$notes_table} n
+             INNER JOIN {$supplements_table} s ON n.supplement_id = s.id
+             WHERE n.user_id = %d AND n.survey_id = %d
+             ORDER BY s.sort_order ASC, n.created_at ASC",
+            $user_id,
+            $survey_id
+        ));
+    }
+
+    /**
+     * Get all notes for a survey with user info (admin export)
+     */
+    public function get_survey_all_notes($survey_id) {
+        global $wpdb;
+        $notes_table = $wpdb->prefix . 'cp_survey_supplement_notes';
+        $supplements_table = $wpdb->prefix . 'cp_survey_supplements';
+        $users_table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT n.*, s.name as supplement_name, s.sort_order, s.admin_context, u.first_name, u.last_name
+             FROM {$notes_table} n
+             INNER JOIN {$supplements_table} s ON n.supplement_id = s.id
+             INNER JOIN {$users_table} u ON n.user_id = u.id
+             WHERE n.survey_id = %d
+             ORDER BY u.first_name ASC, s.sort_order ASC, n.created_at ASC",
+            $survey_id
+        ));
+    }
+
+    /**
+     * Check if supplement has any notes from user
+     */
+    public function has_supplement_notes($user_id, $supplement_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_supplement_notes';
+
+        $count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND supplement_id = %d",
+            $user_id,
+            $supplement_id
+        ));
+
+        return $count > 0;
+    }
+
+    /**
+     * Update survey assignment status to 'in_progress' on first note
+     */
+    public function maybe_update_survey_status_in_progress($user_id, $survey_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_assignments';
+
+        // Only update if status is 'assigned'
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET status = 'in_progress' WHERE user_id = %d AND survey_id = %s AND status = 'assigned'",
+            $user_id,
+            'supplement_' . $survey_id
+        ));
+    }
+
+    /**
+     * Submit supplement survey (mark as submitted)
+     */
+    public function submit_supplement_survey($user_id, $survey_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'cp_survey_assignments';
+
+        $result = $wpdb->update(
+            $table,
+            array('status' => 'submitted'),
+            array(
+                'user_id' => $user_id,
+                'survey_id' => 'supplement_' . $survey_id
+            )
+        );
+
+        return $result !== false;
     }
 }
