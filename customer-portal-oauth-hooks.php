@@ -10,14 +10,15 @@ if (!defined('ABSPATH')) exit;
 error_log('CP OAuth: Hooks file loaded');
 
 /**
- * Hook into Nextend Social Login - called when user logs in with Google
+ * Hook into Nextend Social Login - called AFTER user data is saved
+ * Priority 99 to ensure it runs after Nextend saves the user meta
  */
-add_action('nsl_login', 'cp_handle_google_login', 10, 2);
+add_action('nsl_login', 'cp_handle_google_login', 99, 2);
 
 /**
  * Hook into Nextend Social Login - called when new user registers with Google
  */
-add_action('nsl_register_new_user', 'cp_handle_google_registration', 10, 2);
+add_action('nsl_register_new_user', 'cp_handle_google_registration', 99, 2);
 
 /**
  * Handle Google login - save/link user to customer portal database
@@ -42,6 +43,20 @@ function cp_handle_google_login($user_id, $provider) {
 
     // Get Google user ID from Nextend Social Login
     $google_id = get_user_meta($user_id, 'nsl_id_' . $provider_id, true);
+
+    // If not in meta yet, try to get from provider object directly
+    if (empty($google_id) && is_object($provider)) {
+        try {
+            // Try to get the access token data which might have the user ID
+            $access_token = $provider->getAccessTokenData();
+            if (!empty($access_token['id'])) {
+                $google_id = $access_token['id'];
+                error_log("CP OAuth: Got google_id from provider object: {$google_id}");
+            }
+        } catch (Exception $e) {
+            error_log("CP OAuth: Could not get ID from provider: " . $e->getMessage());
+        }
+    }
 
     // Get user info
     $email = $wp_user->user_email;
