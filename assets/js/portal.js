@@ -633,7 +633,7 @@
         }, function(response) {
             // Check if a survey was created
             if (response.data && response.data.survey_created) {
-                alert('Checklist completed!\n\nA feedback survey has been created for you. Check the Surveys tab to provide feedback on your supplements.');
+                showNotification('Your supplement list has been added to your surveys!', 'success');
             }
 
             card.style.transition = 'all 0.3s';
@@ -652,7 +652,7 @@
             }, 310);
         }, function() {
             card.style.opacity = '1';
-            alert('Failed to archive checklist.');
+            showNotification('Failed to archive checklist.', 'error');
         });
     }
     
@@ -896,6 +896,34 @@
             }
             alert('Cancel failed: ' + escapeHtml(error));
         });
+    }
+
+    // ========================================
+    // NOTIFICATION HELPER
+    // ========================================
+    function showNotification(message, type) {
+        var notification = document.createElement('div');
+        notification.className = 'cp-notification cp-notification-' + (type || 'info');
+        notification.textContent = message;
+
+        // Style based on type
+        var bgColor = '#4CAF50'; // success (green)
+        if (type === 'error') bgColor = '#f44336'; // red
+        if (type === 'info') bgColor = '#2196F3'; // blue
+
+        notification.style.cssText = 'position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: ' + bgColor + '; color: white; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10000; max-width: 350px; font-size: 14px; line-height: 1.5;';
+
+        document.body.appendChild(notification);
+
+        setTimeout(function() {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s';
+            setTimeout(function() {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 4000);
     }
 
     // ========================================
