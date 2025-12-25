@@ -278,6 +278,121 @@ class CP_Database {
             array('id' => $user_id)
         );
     }
+
+    /**
+     * Get user by Google ID
+     */
+    public function get_user_by_google_id($google_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE google_id = %s AND is_active = 1",
+            $google_id
+        ));
+    }
+
+    /**
+     * Get user by email (for account linking)
+     */
+    public function get_user_by_email($email) {
+        if (empty($email)) return null;
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE email = %s AND is_active = 1",
+            $email
+        ));
+    }
+
+    /**
+     * Create or link Google user
+     * Returns user ID
+     */
+    public function save_google_user($google_id, $email, $first_name, $last_name) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        // Ensure OAuth schema is up to date
+        $this->upgrade_user_schema();
+
+        // Check if user exists by Google ID
+        $existing_google_user = $this->get_user_by_google_id($google_id);
+        if ($existing_google_user) {
+            // Update existing Google user
+            $wpdb->update(
+                $table,
+                array(
+                    'first_name' => $first_name,
+                    'last_name' => $last_name,
+                    'email' => $email,
+                    'email_verified' => 1
+                ),
+                array('id' => $existing_google_user->id)
+            );
+            return $existing_google_user->id;
+        }
+
+        // Check if user exists by email (for account linking)
+        $existing_email_user = $this->get_user_by_email($email);
+        if ($existing_email_user) {
+            // Link Google account to existing user
+            $new_provider = $existing_email_user->auth_provider === 'telegram' ? 'both' : 'google';
+            $wpdb->update(
+                $table,
+                array(
+                    'google_id' => $google_id,
+                    'auth_provider' => $new_provider,
+                    'email_verified' => 1
+                ),
+                array('id' => $existing_email_user->id)
+            );
+            return $existing_email_user->id;
+        }
+
+        // Create new Google user
+        $wpdb->insert($table, array(
+            'google_id' => $google_id,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'email' => $email,
+            'email_verified' => 1,
+            'auth_provider' => 'google',
+            'is_active' => 1
+        ));
+
+        return $wpdb->insert_id;
+    }
+
+    /**
+     * Link Google account to existing Telegram user
+     */
+    public function link_google_to_telegram_user($user_id, $google_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        $user = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d",
+            $user_id
+        ));
+
+        if (!$user) return false;
+
+        $new_provider = $user->auth_provider === 'telegram' ? 'both' : 'google';
+
+        $wpdb->update(
+            $table,
+            array(
+                'google_id' => $google_id,
+                'auth_provider' => $new_provider
+            ),
+            array('id' => $user_id)
+        );
+
+        return true;
+    }
     
     /**
      * Get all users
@@ -860,6 +975,47 @@ class CP_Database {
 
         if (!$column) {
             $wpdb->query("ALTER TABLE {$table} ADD COLUMN email varchar(255) NULL AFTER username");
+        }
+
+        // Run Google OAuth schema upgrade
+        $this->upgrade_user_schema_oauth();
+    }
+
+    /**
+     * Upgrade user schema for Google OAuth support
+     */
+    private function upgrade_user_schema_oauth() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        // Check if google_id column exists
+        $google_id_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s AND COLUMN_NAME = 'google_id'",
+            $table,
+            $wpdb->dbname
+        ));
+
+        if (!$google_id_exists) {
+            // Add google_id column
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN google_id varchar(255) NULL AFTER telegram_id");
+
+            // Add auth_provider column
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN auth_provider varchar(50) DEFAULT 'telegram' AFTER google_id");
+
+            // Add email_verified column
+            $wpdb->query("ALTER TABLE {$table} ADD COLUMN email_verified tinyint(1) DEFAULT 0 AFTER email");
+
+            // Make telegram_id nullable for Google-only users
+            $wpdb->query("ALTER TABLE {$table} MODIFY telegram_id bigint(20) NULL");
+
+            // Add unique index for google_id
+            $wpdb->query("ALTER TABLE {$table} ADD UNIQUE KEY google_id (google_id)");
+
+            // Add index for email (for faster lookups)
+            $wpdb->query("ALTER TABLE {$table} ADD KEY email_idx (email)");
+
+            // Update existing records to have auth_provider = 'telegram'
+            $wpdb->query("UPDATE {$table} SET auth_provider = 'telegram' WHERE telegram_id IS NOT NULL");
         }
     }
 
