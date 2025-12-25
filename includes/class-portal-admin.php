@@ -881,6 +881,28 @@ class CP_Admin {
             wp_die(__('You do not have sufficient permissions.'));
         }
 
+        // Handle TXT export BEFORE any output
+        if (isset($_GET['export']) && $_GET['export'] === 'txt' && isset($_GET['view']) && $_GET['view'] === 'supplement_feedback') {
+            $selected_survey_id = isset($_GET['survey_id']) ? intval($_GET['survey_id']) : 0;
+            $selected_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+
+            if ($selected_survey_id && $selected_user_id) {
+                $comments = CP()->database->get_user_supplement_comments($selected_user_id, $selected_survey_id);
+                if (!empty($comments)) {
+                    $users = CP()->database->get_active_users();
+                    $user = array_filter($users, function($u) use ($selected_user_id) {
+                        return $u->id == $selected_user_id;
+                    });
+                    $user = reset($user);
+
+                    if ($user) {
+                        $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
+                        exit;
+                    }
+                }
+            }
+        }
+
         $surveys_module = CP()->surveys;
 
         // Handle actions
@@ -1355,12 +1377,6 @@ class CP_Admin {
                 return $u->id == $selected_user_id;
             });
             $user = reset($user);
-        }
-
-        // Handle TXT export BEFORE any HTML output
-        if (isset($_GET['export']) && $_GET['export'] === 'txt' && $selected_user_id && !empty($comments)) {
-            $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
-            exit;
         }
 
         ?>
