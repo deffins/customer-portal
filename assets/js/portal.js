@@ -878,6 +878,25 @@
             }
         }
 
+        // If no saved user, check if user is logged in via WordPress (Google OAuth)
+        if (!savedUser) {
+            debugLog('No saved user, checking WordPress authentication');
+            ajaxPost({
+                action: 'get_current_portal_user',
+                nonce: CONFIG.nonce
+            }, function(response) {
+                debugLog('WordPress user found', response.data.user);
+                var user = response.data.user;
+                // Save to storage
+                Storage.set('cp_user', JSON.stringify(user));
+                // Show portal
+                showPortal(user);
+            }, function(error) {
+                debugLog('No WordPress user authenticated', error.message);
+                // User is not logged in, continue with normal flow
+            });
+        }
+
         // Logout button
         var logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {

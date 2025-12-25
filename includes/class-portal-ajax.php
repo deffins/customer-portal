@@ -11,6 +11,8 @@ class CP_Ajax {
         // Auth
         add_action('wp_ajax_verify_telegram_auth', array($this, 'verify_telegram_auth'));
         add_action('wp_ajax_nopriv_verify_telegram_auth', array($this, 'verify_telegram_auth'));
+        add_action('wp_ajax_get_current_portal_user', array($this, 'get_current_portal_user'));
+        add_action('wp_ajax_nopriv_get_current_portal_user', array($this, 'get_current_portal_user'));
         
         // Files
         add_action('wp_ajax_get_customer_files', array($this, 'get_customer_files'));
@@ -149,7 +151,55 @@ class CP_Ajax {
         
         wp_send_json_success(array('message' => 'Authenticated successfully'));
     }
-    
+
+    /**
+     * Get current portal user (for WordPress/Google OAuth authenticated users)
+     */
+    public function get_current_portal_user() {
+        check_ajax_referer('cp_nonce', 'nonce');
+
+        // Check if user is logged into WordPress
+        if (!is_user_logged_in()) {
+            wp_send_json_error(array('message' => 'Not logged in'));
+            return;
+        }
+
+        $wp_user_id = get_current_user_id();
+
+        // Get the Customer Portal user ID stored in user meta
+        $cp_user_id = get_user_meta($wp_user_id, 'cp_user_id', true);
+
+        if (!$cp_user_id) {
+            wp_send_json_error(array('message' => 'Customer Portal user not found'));
+            return;
+        }
+
+        // Get the full Customer Portal user record
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+        $user = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND is_active = 1",
+            $cp_user_id
+        ));
+
+        if (!$user) {
+            wp_send_json_error(array('message' => 'User not found or inactive'));
+            return;
+        }
+
+        // Return user data in the same format as Telegram auth
+        wp_send_json_success(array(
+            'user' => array(
+                'id' => $user->telegram_id ? $user->telegram_id : $user->id, // Use telegram_id if available, otherwise CP user id
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'cp_user_id' => $user->id // Include actual CP user ID
+            )
+        ));
+    }
+
     /**
      * Get customer files from Google Drive
      */
