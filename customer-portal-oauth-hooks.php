@@ -6,6 +6,9 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Debug: Log that this file is loaded
+error_log('CP OAuth: Hooks file loaded');
+
 /**
  * Hook into Nextend Social Login - called when user logs in with Google
  */
@@ -20,8 +23,11 @@ add_action('nsl_register_new_user', 'cp_handle_google_registration', 10, 2);
  * Handle Google login - save/link user to customer portal database
  */
 function cp_handle_google_login($user_id, $provider) {
+    error_log("CP OAuth: Hook called - user_id={$user_id}, provider={$provider}");
+
     // Only handle Google provider
     if ($provider !== 'google') {
+        error_log("CP OAuth: Skipping non-Google provider: {$provider}");
         return;
     }
 
