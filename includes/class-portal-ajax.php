@@ -331,14 +331,31 @@ class CP_Ajax {
      */
     public function delete_checklist() {
         check_ajax_referer('cp_nonce', 'nonce');
-        
+
         if (!isset($_POST['checklist_id'])) {
             wp_send_json_error(array('message' => 'Checklist ID missing'));
             return;
         }
-        
+
         $checklist_id = intval($_POST['checklist_id']);
-        CP()->database->archive_checklist($checklist_id);
+
+        // Archive the checklist and get its details
+        $checklist = CP()->database->archive_checklist($checklist_id);
+
+        // If it's a purchase checklist (bagatinatajs), create a supplement survey
+        if ($checklist && $checklist->type === 'bagatinatajs' && $checklist->user_id) {
+            $survey_id = CP()->database->create_survey_from_checklist($checklist_id, $checklist->user_id);
+
+            if ($survey_id) {
+                wp_send_json_success(array(
+                    'message' => 'Checklist archived and feedback survey created!',
+                    'survey_created' => true,
+                    'survey_id' => $survey_id
+                ));
+                return;
+            }
+        }
+
         wp_send_json_success(array('message' => 'Archived'));
     }
     

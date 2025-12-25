@@ -564,11 +564,19 @@ class CP_Database {
         global $wpdb;
         $table = $wpdb->prefix . 'customer_portal_checklists';
 
+        // Get checklist before archiving (to retrieve user_id and type)
+        $checklist = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d",
+            $checklist_id
+        ));
+
         $wpdb->update(
             $table,
             array('status' => 'archived'),
             array('id' => $checklist_id)
         );
+
+        return $checklist;
     }
 
     /**
@@ -1192,6 +1200,65 @@ class CP_Database {
 
         // Delete survey
         return $wpdb->delete($surveys_table, array('id' => $survey_id, 'type' => 'supplement_feedback'));
+    }
+
+    /**
+     * Create supplement survey from checklist and assign to user
+     * Called when a purchase checklist is completed
+     */
+    public function create_survey_from_checklist($checklist_id, $user_id) {
+        global $wpdb;
+        $checklists_table = $wpdb->prefix . 'customer_portal_checklists';
+        $items_table = $wpdb->prefix . 'customer_portal_checklist_items';
+
+        // Get checklist details
+        $checklist = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$checklists_table} WHERE id = %d",
+            $checklist_id
+        ));
+
+        if (!$checklist) {
+            return false;
+        }
+
+        // Get checklist items
+        $items = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$items_table} WHERE checklist_id = %d ORDER BY sort_order ASC",
+            $checklist_id
+        ));
+
+        if (empty($items)) {
+            return false;
+        }
+
+        // Extract supplement names from product_name (first part before |)
+        $supplement_names = array();
+        foreach ($items as $item) {
+            $product_name = trim($item->product_name);
+            if (!empty($product_name)) {
+                $supplement_names[] = $product_name;
+            }
+        }
+
+        if (empty($supplement_names)) {
+            return false;
+        }
+
+        // Create survey title based on checklist title
+        $survey_title = $checklist->title . ' - Feedback';
+
+        // Create the supplement survey
+        $survey_id = $this->save_supplement_survey(null, $survey_title, $supplement_names);
+
+        if (!$survey_id) {
+            return false;
+        }
+
+        // Assign survey to user with format "supplement_{id}"
+        $assignment_survey_id = 'supplement_' . $survey_id;
+        $this->assign_survey($user_id, $assignment_survey_id);
+
+        return $survey_id;
     }
 
     /**

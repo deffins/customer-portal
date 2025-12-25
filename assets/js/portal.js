@@ -622,15 +622,20 @@
     
     function deleteChecklist(checklistId) {
         if (!confirm('Mark this checklist as complete? It will be archived.')) return;
-        
+
         var card = document.querySelector('.checklist-card[data-checklist-id="' + checklistId + '"]');
         card.style.opacity = '0.5';
-        
+
         ajaxPost({
             action: 'delete_checklist',
             checklist_id: checklistId,
             nonce: CONFIG.nonce
-        }, function() {
+        }, function(response) {
+            // Check if a survey was created
+            if (response.data && response.data.survey_created) {
+                alert('Checklist completed!\n\nA feedback survey has been created for you. Check the Surveys tab to provide feedback on your supplements.');
+            }
+
             card.style.transition = 'all 0.3s';
             card.style.height = card.offsetHeight + 'px';
             setTimeout(function() {
