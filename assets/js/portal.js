@@ -893,7 +893,31 @@
                 showPortal(user);
             }, function(error) {
                 debugLog('No WordPress user authenticated', error.message);
-                // User is not logged in, continue with normal flow
+                // User is not logged in, load Telegram widget
+                debugLog('Loading Telegram widget');
+                var telegramContainer = document.getElementById('telegram-login');
+
+                if (telegramContainer && CONFIG.botUsername) {
+                    var script = document.createElement('script');
+                    script.async = true;
+                    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+                    script.setAttribute('data-telegram-login', CONFIG.botUsername);
+                    script.setAttribute('data-size', 'large');
+                    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+                    script.setAttribute('data-request-access', 'write');
+
+                    script.onload = function() {
+                        debugLog('Telegram widget loaded');
+                    };
+                    script.onerror = function() {
+                        debugLog('Failed to load Telegram widget');
+                        telegramContainer.innerHTML = '<p style="color:red;">Failed to load Telegram login.</p>';
+                    };
+
+                    telegramContainer.appendChild(script);
+                } else {
+                    debugLog('Bot username missing or container not found');
+                }
             });
         }
 
@@ -972,34 +996,12 @@
             });
         }
 
-        // Load Telegram widget only when user is not already logged in
-        if (!savedUser) {
-            debugLog('Loading Telegram widget');
-            var telegramContainer = document.getElementById('telegram-login');
-            
-            if (telegramContainer && CONFIG.botUsername) {
-                var script = document.createElement('script');
-                script.async = true;
-                script.src = 'https://telegram.org/js/telegram-widget.js?22';
-                script.setAttribute('data-telegram-login', CONFIG.botUsername);
-                script.setAttribute('data-size', 'large');
-                script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-                script.setAttribute('data-request-access', 'write');
-                
-                script.onload = function() {
-                    debugLog('Telegram widget loaded');
-                };
-                script.onerror = function() {
-                    debugLog('Failed to load Telegram widget');
-                    telegramContainer.innerHTML = '<p style="color:red;">Failed to load Telegram login.</p>';
-                };
-                
-                telegramContainer.appendChild(script);
-            } else {
-                debugLog('Bot username missing or container not found');
-            }
-        } else {
-            // Auto-show portal if user is already authenticated
+        // Load Telegram widget (will only load if WordPress auth check fails)
+        // This is now called from within the WordPress auth error callback
+
+        // If we have a saved user, show portal immediately
+        if (savedUser) {
+            debugLog('Showing portal with saved user');
             showPortal(savedUser);
         }
     }
