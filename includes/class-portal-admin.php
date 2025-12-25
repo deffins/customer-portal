@@ -1464,8 +1464,16 @@ class CP_Admin {
 
         $filename = 'supplement-feedback-' . sanitize_file_name($client_name) . '-' . date('Y-m-d') . '.txt';
 
+        // Clean any output buffers
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        // Set headers for plain text download
         header('Content-Type: text/plain; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Expires: 0');
 
         echo "Klients: " . $client_name . "\n";
         echo "Survey: " . $survey->title . "\n";
