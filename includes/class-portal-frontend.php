@@ -76,7 +76,7 @@ class CP_Frontend {
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('cp_nonce'),
             'botUsername' => CP()->get_bot_username(),
-            'debug' => true // Enable debug temporarily
+            'debug' => false
         ));
 
         // Calendar config for customer view

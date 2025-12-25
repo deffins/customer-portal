@@ -6,9 +6,6 @@
 
 if (!defined('ABSPATH')) exit;
 
-// Debug: Log that this file is loaded
-error_log('CP OAuth: Hooks file loaded');
-
 /**
  * Hook into WordPress login - fires AFTER Nextend saves all user meta
  * This ensures google_id is already saved in user meta
@@ -21,25 +18,23 @@ add_action('wp_login', 'cp_check_social_login_on_wp_login', 10, 2);
  */
 function cp_check_social_login_on_wp_login($user_login, $wp_user) {
     $user_id = $wp_user->ID;
-    error_log("CP OAuth: wp_login fired for user_id={$user_id}");
 
     // Check if this user has Google social login
     $google_id = get_user_meta($user_id, 'nsl_id_google', true);
 
-    // Debug: Check what meta keys exist for this user
+    // Check if this is a social login
     if (empty($google_id)) {
         $all_meta = get_user_meta($user_id);
-        $nsl_keys = array();
+        $has_nsl = false;
         foreach ($all_meta as $key => $value) {
             if (strpos($key, 'nsl_') === 0) {
-                $nsl_keys[] = $key;
+                $has_nsl = true;
+                break;
             }
         }
-        error_log("CP OAuth: google_id empty. Available NSL keys: " . implode(', ', $nsl_keys));
 
         // If no NSL keys at all, this is not a social login
-        if (empty($nsl_keys)) {
-            error_log("CP OAuth: Not a Google login, skipping");
+        if (!$has_nsl) {
             return;
         }
     }
@@ -49,15 +44,11 @@ function cp_check_social_login_on_wp_login($user_login, $wp_user) {
     $first_name = get_user_meta($user_id, 'first_name', true);
     $last_name = get_user_meta($user_id, 'last_name', true);
 
-    // Debug: Log what we got
-    error_log("CP OAuth: Google login detected - google_id='{$google_id}', email='{$email}', first_name='{$first_name}', last_name='{$last_name}'");
-
     // If first/last name not set, try to extract from display name
     if (empty($first_name) && !empty($wp_user->display_name)) {
         $name_parts = explode(' ', $wp_user->display_name, 2);
         $first_name = $name_parts[0];
         $last_name = isset($name_parts[1]) ? $name_parts[1] : '';
-        error_log("CP OAuth: Extracted from display_name - first_name='{$first_name}', last_name='{$last_name}'");
     }
 
     // Save/link user in our customer portal database
@@ -67,12 +58,7 @@ function cp_check_social_login_on_wp_login($user_login, $wp_user) {
         // Store the customer portal user ID in WP user meta for quick access
         if ($cp_user_id) {
             update_user_meta($user_id, 'cp_user_id', $cp_user_id);
-            error_log("CP OAuth: Saved cp_user_id {$cp_user_id} for WP user {$user_id}");
-        } else {
-            error_log("CP OAuth: Failed to save google user for WP user {$user_id}");
         }
-    } else {
-        error_log("CP OAuth: Missing email for WP user {$user_id}");
     }
 }
 
