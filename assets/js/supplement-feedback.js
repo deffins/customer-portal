@@ -77,7 +77,7 @@
         // Header
         html += '<button class="button back-to-surveys-btn" style="margin-bottom: 20px;">← Back to Surveys</button>';
         html += '<h3>' + escapeHtml(currentSurvey.title) + '</h3>';
-        html += '<p class="supplement-survey-description">Tap a supplement to add feedback:</p>';
+        html += '<p class="supplement-survey-description">Add your feedback for each supplement:</p>';
 
         // Supplements list
         html += '<div class="supplements-list-v2">';
@@ -94,19 +94,58 @@
                     lastNotePreview = lastNote.text ? lastNote.text.substring(0, 60) + (lastNote.text.length > 60 ? '...' : '') : '';
                 }
 
-                html += '<div class="supplement-list-item" data-index="' + index + '">';
-                html += '<div class="supplement-list-header">';
-                html += '<div class="supplement-status-indicator ' + (hasNotes ? 'has-notes' : 'no-notes') + '"></div>';
-                html += '<div class="supplement-list-content">';
-                html += '<strong class="supplement-list-name">' + escapeHtml(supplement.name) + '</strong>';
+                html += '<div class="supplement-list-item-v2" data-index="' + index + '">';
 
+                // Header row: name on left, button on right
+                html += '<div class="supplement-list-header-v2">';
+                html += '<div class="supplement-header-left">';
+                html += '<span class="supplement-status-dot ' + (hasNotes ? 'has-notes' : 'no-notes') + '"></span>';
+                html += '<strong class="supplement-list-name-v2">' + escapeHtml(supplement.name) + '</strong>';
+                html += '</div>';
+                html += '<button class="button supplement-add-btn" data-index="' + index + '">';
+                html += (hasNotes ? 'Edit comment' : 'Add comment');
+                html += '</button>';
+                html += '</div>';
+
+                // Preview if has notes
                 if (lastNotePreview) {
-                    html += '<p class="supplement-list-preview">' + escapeHtml(lastNotePreview) + '</p>';
+                    html += '<div class="supplement-preview-v2">' + escapeHtml(lastNotePreview) + '</div>';
                 }
 
+                // Expandable editor section (hidden by default)
+                html += '<div class="supplement-editor-section-v2" style="display: none;">';
+
+                // Show admin context if available
+                if (supplement.admin_context) {
+                    html += '<div class="supplement-admin-context-inline">';
+                    html += '<small>' + escapeHtml(supplement.admin_context) + '</small>';
+                    html += '</div>';
+                }
+
+                html += '<textarea class="supplement-textarea-v2" data-index="' + index + '" ';
+                html += 'placeholder="Jūtams efekts? Slikta reakcija? Cik ilgi lieto? Cik daudz?" rows="4"></textarea>';
+                html += '<div class="supplement-editor-actions">';
+                html += '<button class="button button-primary supplement-save-btn" data-index="' + index + '">Save</button>';
+                html += '<button class="button supplement-cancel-btn" data-index="' + index + '">Cancel</button>';
                 html += '</div>';
-                html += '</div>';
-                html += '</div>';
+
+                // Show existing notes (read-only)
+                if (supplement.notes && supplement.notes.length > 0) {
+                    html += '<div class="supplement-existing-notes-inline">';
+                    html += '<h5>Previous notes:</h5>';
+                    supplement.notes.forEach(function(note) {
+                        var noteDate = note.created_at ? new Date(note.created_at).toLocaleDateString() : '';
+                        html += '<div class="existing-note-inline">';
+                        html += '<div class="existing-note-meta-inline">' + noteDate + '</div>';
+                        html += '<div class="existing-note-text-inline">' + escapeHtml(note.text).replace(/\n/g, '<br>') + '</div>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                html += '</div>'; // .supplement-editor-section-v2
+
+                html += '</div>'; // .supplement-list-item-v2
             });
         }
 
@@ -140,12 +179,33 @@
             });
         }
 
-        // Supplement items - click to open detail view
-        var items = container.querySelectorAll('.supplement-list-item');
-        for (var i = 0; i < items.length; i++) {
-            items[i].addEventListener('click', function() {
+        // Add comment buttons - expand editor
+        var addBtns = container.querySelectorAll('.supplement-add-btn');
+        for (var i = 0; i < addBtns.length; i++) {
+            addBtns[i].addEventListener('click', function(e) {
+                e.stopPropagation();
                 var index = parseInt(this.getAttribute('data-index'));
-                showSupplementDetailView(index);
+                expandSupplementEditor(index);
+            });
+        }
+
+        // Save buttons
+        var saveBtns = container.querySelectorAll('.supplement-save-btn');
+        for (var i = 0; i < saveBtns.length; i++) {
+            saveBtns[i].addEventListener('click', function(e) {
+                e.stopPropagation();
+                var index = parseInt(this.getAttribute('data-index'));
+                saveAndCollapseEditor(index);
+            });
+        }
+
+        // Cancel buttons
+        var cancelBtns = container.querySelectorAll('.supplement-cancel-btn');
+        for (var i = 0; i < cancelBtns.length; i++) {
+            cancelBtns[i].addEventListener('click', function(e) {
+                e.stopPropagation();
+                var index = parseInt(this.getAttribute('data-index'));
+                collapseSupplementEditor(index);
             });
         }
 
@@ -154,6 +214,111 @@
         if (finishBtn) {
             finishBtn.addEventListener('click', submitSupplementSurvey);
         }
+    }
+
+    /**
+     * Expand supplement editor inline
+     */
+    function expandSupplementEditor(index) {
+        // First collapse all other editors
+        var allEditors = document.querySelectorAll('.supplement-editor-section-v2');
+        for (var i = 0; i < allEditors.length; i++) {
+            allEditors[i].style.display = 'none';
+        }
+
+        // Expand the selected editor
+        var items = document.querySelectorAll('.supplement-list-item-v2');
+        if (items[index]) {
+            var editor = items[index].querySelector('.supplement-editor-section-v2');
+            var textarea = items[index].querySelector('.supplement-textarea-v2');
+            if (editor && textarea) {
+                editor.style.display = 'block';
+                textarea.focus();
+            }
+        }
+    }
+
+    /**
+     * Collapse supplement editor
+     */
+    function collapseSupplementEditor(index) {
+        var items = document.querySelectorAll('.supplement-list-item-v2');
+        if (items[index]) {
+            var editor = items[index].querySelector('.supplement-editor-section-v2');
+            var textarea = items[index].querySelector('.supplement-textarea-v2');
+            if (editor && textarea) {
+                editor.style.display = 'none';
+                textarea.value = '';
+            }
+        }
+    }
+
+    /**
+     * Save note and collapse, then open next supplement
+     */
+    function saveAndCollapseEditor(index) {
+        var items = document.querySelectorAll('.supplement-list-item-v2');
+        if (!items[index]) return;
+
+        var textarea = items[index].querySelector('.supplement-textarea-v2');
+        if (!textarea) return;
+
+        var noteText = textarea.value.trim();
+        if (!noteText) {
+            alert('Please enter some feedback before saving.');
+            return;
+        }
+
+        var supplement = currentSurvey.supplements[index];
+        if (!supplement) return;
+
+        // Save the note
+        saveSupplementNote(supplement.id, noteText, function() {
+            // Mark as having notes
+            supplement.has_notes = true;
+
+            // Collapse current editor
+            collapseSupplementEditor(index);
+
+            // Update the button text and preview
+            var addBtn = items[index].querySelector('.supplement-add-btn');
+            if (addBtn) {
+                addBtn.textContent = 'Edit comment';
+            }
+
+            // Add/update preview
+            var existingPreview = items[index].querySelector('.supplement-preview-v2');
+            var preview = noteText.substring(0, 60) + (noteText.length > 60 ? '...' : '');
+            if (existingPreview) {
+                existingPreview.textContent = preview;
+            } else {
+                var header = items[index].querySelector('.supplement-list-header-v2');
+                if (header) {
+                    var previewDiv = document.createElement('div');
+                    previewDiv.className = 'supplement-preview-v2';
+                    previewDiv.textContent = preview;
+                    header.parentNode.insertBefore(previewDiv, header.nextSibling);
+                }
+            }
+
+            // Update status dot
+            var statusDot = items[index].querySelector('.supplement-status-dot');
+            if (statusDot) {
+                statusDot.classList.remove('no-notes');
+                statusDot.classList.add('has-notes');
+            }
+
+            // Show notification
+            showNotification('Feedback saved!', 'success');
+
+            // Auto-expand next supplement
+            var nextIndex = index + 1;
+            if (nextIndex < currentSurvey.supplements.length) {
+                setTimeout(function() {
+                    expandSupplementEditor(nextIndex);
+                }, 300);
+            }
+        });
     }
 
     /**
