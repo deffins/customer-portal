@@ -10,52 +10,26 @@ if (!defined('ABSPATH')) exit;
 error_log('CP OAuth: Hooks file loaded');
 
 /**
- * Hook into Nextend Social Login - called AFTER user data is saved
- * Priority 99 to ensure it runs after Nextend saves the user meta
+ * Hook into WordPress login - fires AFTER Nextend saves all user meta
+ * This ensures google_id is already saved in user meta
  */
-add_action('nsl_login', 'cp_handle_google_login', 99, 2);
+add_action('wp_login', 'cp_check_social_login_on_wp_login', 10, 2);
 
 /**
- * Hook into Nextend Social Login - called when new user registers with Google
+ * Check if this is a social login and handle it
+ * Called on wp_login hook (username, WP_User object)
  */
-add_action('nsl_register_new_user', 'cp_handle_google_registration', 99, 2);
+function cp_check_social_login_on_wp_login($user_login, $wp_user) {
+    $user_id = $wp_user->ID;
+    error_log("CP OAuth: wp_login fired for user_id={$user_id}");
 
-/**
- * Handle Google login - save/link user to customer portal database
- */
-function cp_handle_google_login($user_id, $provider) {
-    // $provider is an object (NextendSocialProviderGoogle), get the ID
-    $provider_id = is_object($provider) ? $provider->getId() : $provider;
-    error_log("CP OAuth: Hook called - user_id={$user_id}, provider_id={$provider_id}");
+    // Check if this user has Google social login
+    $google_id = get_user_meta($user_id, 'nsl_id_google', true);
 
-    // Only handle Google provider
-    if ($provider_id !== 'google') {
-        error_log("CP OAuth: Skipping non-Google provider: {$provider_id}");
+    // If no Google ID, this is not a Google login - skip
+    if (empty($google_id)) {
+        error_log("CP OAuth: Not a Google login, skipping");
         return;
-    }
-
-    // Get WordPress user data
-    $wp_user = get_user_by('id', $user_id);
-    if (!$wp_user) {
-        error_log("CP OAuth: WordPress user not found for ID: {$user_id}");
-        return;
-    }
-
-    // Get Google user ID from Nextend Social Login
-    $google_id = get_user_meta($user_id, 'nsl_id_' . $provider_id, true);
-
-    // If not in meta yet, try to get from provider object directly
-    if (empty($google_id) && is_object($provider)) {
-        try {
-            // Try to get the access token data which might have the user ID
-            $access_token = $provider->getAccessTokenData();
-            if (!empty($access_token['id'])) {
-                $google_id = $access_token['id'];
-                error_log("CP OAuth: Got google_id from provider object: {$google_id}");
-            }
-        } catch (Exception $e) {
-            error_log("CP OAuth: Could not get ID from provider: " . $e->getMessage());
-        }
     }
 
     // Get user info
@@ -64,7 +38,7 @@ function cp_handle_google_login($user_id, $provider) {
     $last_name = get_user_meta($user_id, 'last_name', true);
 
     // Debug: Log what we got
-    error_log("CP OAuth: google_id='{$google_id}', email='{$email}', first_name='{$first_name}', last_name='{$last_name}'");
+    error_log("CP OAuth: Google login detected - google_id='{$google_id}', email='{$email}', first_name='{$first_name}', last_name='{$last_name}'");
 
     // If first/last name not set, try to extract from display name
     if (empty($first_name) && !empty($wp_user->display_name)) {
@@ -75,7 +49,7 @@ function cp_handle_google_login($user_id, $provider) {
     }
 
     // Save/link user in our customer portal database
-    if (!empty($google_id) && !empty($email)) {
+    if (!empty($email)) {
         $cp_user_id = CP()->database->save_google_user($google_id, $email, $first_name, $last_name);
 
         // Store the customer portal user ID in WP user meta for quick access
@@ -86,15 +60,8 @@ function cp_handle_google_login($user_id, $provider) {
             error_log("CP OAuth: Failed to save google user for WP user {$user_id}");
         }
     } else {
-        error_log("CP OAuth: Missing google_id or email for WP user {$user_id}");
+        error_log("CP OAuth: Missing email for WP user {$user_id}");
     }
-}
-
-/**
- * Handle Google registration - same as login
- */
-function cp_handle_google_registration($user_id, $provider) {
-    cp_handle_google_login($user_id, $provider);
 }
 
 /**
