@@ -1357,6 +1357,12 @@ class CP_Admin {
             $user = reset($user);
         }
 
+        // Handle TXT export BEFORE any HTML output
+        if (isset($_GET['export']) && $_GET['export'] === 'txt' && $selected_user_id && !empty($comments)) {
+            $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
+            exit;
+        }
+
         ?>
         <div class="cp-supplement-feedback">
             <h2>Client Supplement Feedback</h2>
@@ -1431,12 +1437,6 @@ class CP_Admin {
             <?php endif; ?>
         </div>
         <?php
-
-        // Handle TXT export
-        if (isset($_GET['export']) && $_GET['export'] === 'txt' && $selected_user_id && !empty($comments)) {
-            $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
-            exit;
-        }
     }
 
     /**
