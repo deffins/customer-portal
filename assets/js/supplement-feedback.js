@@ -103,7 +103,7 @@
                 html += '<strong class="supplement-list-name-v2">' + escapeHtml(supplement.name) + '</strong>';
                 html += '</div>';
                 html += '<button class="button supplement-add-btn" data-index="' + index + '">';
-                html += (hasNotes ? 'Edit comment' : 'Add comment');
+                html += 'Add comment';
                 html += '</button>';
                 html += '</div>';
 
@@ -280,13 +280,7 @@
             // Collapse current editor
             collapseSupplementEditor(index);
 
-            // Update the button text and preview
-            var addBtn = items[index].querySelector('.supplement-add-btn');
-            if (addBtn) {
-                addBtn.textContent = 'Edit comment';
-            }
-
-            // Add/update preview
+            // Update preview
             var existingPreview = items[index].querySelector('.supplement-preview-v2');
             var preview = noteText.substring(0, 60) + (noteText.length > 60 ? '...' : '');
             if (existingPreview) {
