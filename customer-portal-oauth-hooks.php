@@ -26,10 +26,22 @@ function cp_check_social_login_on_wp_login($user_login, $wp_user) {
     // Check if this user has Google social login
     $google_id = get_user_meta($user_id, 'nsl_id_google', true);
 
-    // If no Google ID, this is not a Google login - skip
+    // Debug: Check what meta keys exist for this user
     if (empty($google_id)) {
-        error_log("CP OAuth: Not a Google login, skipping");
-        return;
+        $all_meta = get_user_meta($user_id);
+        $nsl_keys = array();
+        foreach ($all_meta as $key => $value) {
+            if (strpos($key, 'nsl_') === 0) {
+                $nsl_keys[] = $key;
+            }
+        }
+        error_log("CP OAuth: google_id empty. Available NSL keys: " . implode(', ', $nsl_keys));
+
+        // If no NSL keys at all, this is not a social login
+        if (empty($nsl_keys)) {
+            error_log("CP OAuth: Not a Google login, skipping");
+            return;
+        }
     }
 
     // Get user info
