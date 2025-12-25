@@ -111,7 +111,9 @@ class CP_Frontend {
                     <p style="color: #666; font-size: 14px; margin-bottom: 10px;">or</p>
                     <?php
                     // Add Nextend Social Login button for Google
-                    if (function_exists('the_nsl_login_buttons')) {
+                    if (shortcode_exists('nextend_social_login')) {
+                        echo do_shortcode('[nextend_social_login provider="google"]');
+                    } elseif (function_exists('the_nsl_login_buttons')) {
                         the_nsl_login_buttons();
                     }
                     ?>
