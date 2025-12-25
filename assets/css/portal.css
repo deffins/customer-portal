@@ -887,17 +887,6 @@
     font-size: 14px;
 }
 
-.supplement-preview-v2 {
-    margin-top: 10px;
-    padding: 10px 12px;
-    background: #f9f9f9;
-    border-left: 3px solid #E87C52;
-    border-radius: 4px;
-    color: #666;
-    font-size: 14px;
-    font-style: italic;
-}
-
 .supplement-editor-section-v2 {
     margin-top: 16px;
     padding-top: 16px;
@@ -950,8 +939,13 @@
 
 .supplement-editor-actions {
     display: flex;
+    flex-direction: row;
     gap: 10px;
     margin-top: 10px;
+}
+
+.supplement-editor-actions .button {
+    flex: 1;
 }
 
 .supplement-existing-notes-inline {
@@ -1013,14 +1007,6 @@
     }
 
     .supplement-add-btn {
-        width: 100%;
-    }
-
-    .supplement-editor-actions {
-        flex-direction: column;
-    }
-
-    .supplement-editor-actions .button {
         width: 100%;
     }
 }

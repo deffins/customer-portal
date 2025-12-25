@@ -107,11 +107,6 @@
                 html += '</button>';
                 html += '</div>';
 
-                // Preview if has notes
-                if (lastNotePreview) {
-                    html += '<div class="supplement-preview-v2">' + escapeHtml(lastNotePreview) + '</div>';
-                }
-
                 // Expandable editor section (hidden by default)
                 html += '<div class="supplement-editor-section-v2" style="display: none;">';
 
@@ -220,20 +215,28 @@
      * Expand supplement editor inline
      */
     function expandSupplementEditor(index) {
-        // First collapse all other editors
-        var allEditors = document.querySelectorAll('.supplement-editor-section-v2');
-        for (var i = 0; i < allEditors.length; i++) {
-            allEditors[i].style.display = 'none';
+        // First collapse all other editors and show their buttons
+        var allItems = document.querySelectorAll('.supplement-list-item-v2');
+        for (var i = 0; i < allItems.length; i++) {
+            var editor = allItems[i].querySelector('.supplement-editor-section-v2');
+            var button = allItems[i].querySelector('.supplement-add-btn');
+            if (editor) editor.style.display = 'none';
+            if (button) button.style.display = 'block';
         }
 
-        // Expand the selected editor
+        // Expand the selected editor and hide its button
         var items = document.querySelectorAll('.supplement-list-item-v2');
         if (items[index]) {
             var editor = items[index].querySelector('.supplement-editor-section-v2');
             var textarea = items[index].querySelector('.supplement-textarea-v2');
+            var button = items[index].querySelector('.supplement-add-btn');
+
             if (editor && textarea) {
                 editor.style.display = 'block';
                 textarea.focus();
+            }
+            if (button) {
+                button.style.display = 'none';
             }
         }
     }
@@ -246,9 +249,14 @@
         if (items[index]) {
             var editor = items[index].querySelector('.supplement-editor-section-v2');
             var textarea = items[index].querySelector('.supplement-textarea-v2');
+            var button = items[index].querySelector('.supplement-add-btn');
+
             if (editor && textarea) {
                 editor.style.display = 'none';
                 textarea.value = '';
+            }
+            if (button) {
+                button.style.display = 'block';
             }
         }
     }
@@ -279,21 +287,6 @@
 
             // Collapse current editor
             collapseSupplementEditor(index);
-
-            // Update preview
-            var existingPreview = items[index].querySelector('.supplement-preview-v2');
-            var preview = noteText.substring(0, 60) + (noteText.length > 60 ? '...' : '');
-            if (existingPreview) {
-                existingPreview.textContent = preview;
-            } else {
-                var header = items[index].querySelector('.supplement-list-header-v2');
-                if (header) {
-                    var previewDiv = document.createElement('div');
-                    previewDiv.className = 'supplement-preview-v2';
-                    previewDiv.textContent = preview;
-                    header.parentNode.insertBefore(previewDiv, header.nextSibling);
-                }
-            }
 
             // Update status dot
             var statusDot = items[index].querySelector('.supplement-status-dot');
