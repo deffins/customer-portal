@@ -23,22 +23,25 @@ add_action('nsl_register_new_user', 'cp_handle_google_registration', 10, 2);
  * Handle Google login - save/link user to customer portal database
  */
 function cp_handle_google_login($user_id, $provider) {
-    error_log("CP OAuth: Hook called - user_id={$user_id}, provider={$provider}");
+    // $provider is an object (NextendSocialProviderGoogle), get the ID
+    $provider_id = is_object($provider) ? $provider->getId() : $provider;
+    error_log("CP OAuth: Hook called - user_id={$user_id}, provider_id={$provider_id}");
 
     // Only handle Google provider
-    if ($provider !== 'google') {
-        error_log("CP OAuth: Skipping non-Google provider: {$provider}");
+    if ($provider_id !== 'google') {
+        error_log("CP OAuth: Skipping non-Google provider: {$provider_id}");
         return;
     }
 
     // Get WordPress user data
     $wp_user = get_user_by('id', $user_id);
     if (!$wp_user) {
+        error_log("CP OAuth: WordPress user not found for ID: {$user_id}");
         return;
     }
 
     // Get Google user ID from Nextend Social Login
-    $google_id = get_user_meta($user_id, 'nsl_id_' . $provider, true);
+    $google_id = get_user_meta($user_id, 'nsl_id_' . $provider_id, true);
 
     // Get user info
     $email = $wp_user->user_email;
