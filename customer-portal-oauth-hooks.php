@@ -48,13 +48,17 @@ function cp_handle_google_login($user_id, $provider) {
 
     // Save/link user in our customer portal database
     if (!empty($google_id) && !empty($email)) {
-        CP()->database->save_google_user($google_id, $email, $first_name, $last_name);
+        $cp_user_id = CP()->database->save_google_user($google_id, $email, $first_name, $last_name);
 
         // Store the customer portal user ID in WP user meta for quick access
-        $cp_user = CP()->database->get_user_by_google_id($google_id);
-        if ($cp_user) {
-            update_user_meta($user_id, 'cp_user_id', $cp_user->id);
+        if ($cp_user_id) {
+            update_user_meta($user_id, 'cp_user_id', $cp_user_id);
+            error_log("CP OAuth: Saved cp_user_id {$cp_user_id} for WP user {$user_id}");
+        } else {
+            error_log("CP OAuth: Failed to save google user for WP user {$user_id}");
         }
+    } else {
+        error_log("CP OAuth: Missing google_id or email for WP user {$user_id}");
     }
 }
 
