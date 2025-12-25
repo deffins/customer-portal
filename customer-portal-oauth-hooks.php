@@ -48,11 +48,15 @@ function cp_handle_google_login($user_id, $provider) {
     $first_name = get_user_meta($user_id, 'first_name', true);
     $last_name = get_user_meta($user_id, 'last_name', true);
 
+    // Debug: Log what we got
+    error_log("CP OAuth: google_id='{$google_id}', email='{$email}', first_name='{$first_name}', last_name='{$last_name}'");
+
     // If first/last name not set, try to extract from display name
     if (empty($first_name) && !empty($wp_user->display_name)) {
         $name_parts = explode(' ', $wp_user->display_name, 2);
         $first_name = $name_parts[0];
         $last_name = isset($name_parts[1]) ? $name_parts[1] : '';
+        error_log("CP OAuth: Extracted from display_name - first_name='{$first_name}', last_name='{$last_name}'");
     }
 
     // Save/link user in our customer portal database
