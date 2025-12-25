@@ -275,13 +275,16 @@
         document.getElementById('user-name').textContent = user.first_name;
         document.getElementById('portal-section').style.display = 'block';
 
-        // Prime user email from profile (and cache)
-        loadUserProfile(user.id);
+        // For Google OAuth users, use cp_user_id; for Telegram users, use id (telegram_id)
+        var userId = user.cp_user_id || user.id;
 
-        loadFiles(user.id);
-        loadChecklists(user.id);
-        loadLinks(user.id);
-        loadSurveys(user.id);
+        // Prime user email from profile (and cache)
+        loadUserProfile(userId);
+
+        loadFiles(userId, user.cp_user_id);
+        loadChecklists(userId, user.cp_user_id);
+        loadLinks(userId, user.cp_user_id);
+        loadSurveys(userId, user.cp_user_id);
 
         // Initialize supplement feedback if available
         if (window.cpInitSupplementFeedback) {
@@ -291,56 +294,88 @@
         // Calendar will auto-load via calendar.js init when tab is rendered
     }
     
-    function loadFiles(telegramId) {
+    function loadFiles(telegramId, cpUserId) {
         debugLog('Loading files for', telegramId);
-        
-        ajaxPost({
+
+        var params = {
             action: 'get_customer_files',
-            telegram_id: telegramId,
             nonce: CONFIG.nonce
-        }, function(response) {
+        };
+
+        // Send user_id if it's a Google user (cpUserId exists), otherwise telegram_id
+        if (cpUserId) {
+            params.user_id = cpUserId;
+        } else {
+            params.telegram_id = telegramId;
+        }
+
+        ajaxPost(params, function(response) {
             displayFiles(response.data.files);
         }, function(error) {
             document.getElementById('files-container').innerHTML = '<p>Failed to load files: ' + escapeHtml(error) + '</p>';
         });
     }
-    
-    function loadChecklists(telegramId) {
+
+    function loadChecklists(telegramId, cpUserId) {
         debugLog('Loading checklists for', telegramId);
-        
-        ajaxPost({
+
+        var params = {
             action: 'get_customer_checklists',
-            telegram_id: telegramId,
             nonce: CONFIG.nonce
-        }, function(response) {
+        };
+
+        // Send user_id if it's a Google user (cpUserId exists), otherwise telegram_id
+        if (cpUserId) {
+            params.user_id = cpUserId;
+        } else {
+            params.telegram_id = telegramId;
+        }
+
+        ajaxPost(params, function(response) {
             displayChecklists(response.data.checklists);
         }, function(error) {
             document.getElementById('checklists-container').innerHTML = '<p>Failed to load checklists: ' + escapeHtml(error) + '</p>';
         });
     }
-    
-    function loadLinks(telegramId) {
+
+    function loadLinks(telegramId, cpUserId) {
         debugLog('Loading links for', telegramId);
 
-        ajaxPost({
+        var params = {
             action: 'get_customer_links',
-            telegram_id: telegramId,
             nonce: CONFIG.nonce
-        }, function(response) {
+        };
+
+        // Send user_id if it's a Google user (cpUserId exists), otherwise telegram_id
+        if (cpUserId) {
+            params.user_id = cpUserId;
+        } else {
+            params.telegram_id = telegramId;
+        }
+
+        ajaxPost(params, function(response) {
             displayLinks(response.data.links);
         }, function(error) {
             document.getElementById('links-container').innerHTML = '<p>Failed to load links: ' + escapeHtml(error) + '</p>';
         });
     }
 
-    function loadSurveys(telegramId) {
+    function loadSurveys(telegramId, cpUserId) {
         debugLog('Loading surveys for', telegramId);
 
-        ajaxPost({
+        var params = {
             action: 'cp_get_assigned_surveys',
-            telegram_id: telegramId,
             nonce: CONFIG.nonce
-        }, function(response) {
+        };
+
+        // Send user_id if it's a Google user (cpUserId exists), otherwise telegram_id
+        if (cpUserId) {
+            params.user_id = cpUserId;
+        } else {
+            params.telegram_id = telegramId;
+        }
+
+        ajaxPost(params, function(response) {
             // The surveys wizard will handle display
             if (window.cpDisplaySurveys) {
                 window.cpDisplaySurveys(response.data.surveys);

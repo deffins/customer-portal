@@ -205,15 +205,20 @@ class CP_Ajax {
      */
     public function get_customer_files() {
         check_ajax_referer('cp_nonce', 'nonce');
-        
-        if (!isset($_POST['telegram_id'])) {
-            wp_send_json_error(array('message' => 'Telegram ID missing'));
+
+        // Accept either telegram_id or user_id (for Google OAuth users)
+        $telegram_id = isset($_POST['telegram_id']) ? intval($_POST['telegram_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if ($telegram_id) {
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        } elseif ($user_id) {
+            $user = CP()->database->get_user_by_id($user_id);
+        } else {
+            wp_send_json_error(array('message' => 'User ID missing'));
             return;
         }
-        
-        $telegram_id = intval($_POST['telegram_id']);
-        $user = CP()->database->get_user_by_telegram_id($telegram_id);
-        
+
         if (!$user) {
             wp_send_json_error(array('message' => 'User not found'));
             return;
@@ -280,15 +285,20 @@ class CP_Ajax {
      */
     public function get_customer_checklists() {
         check_ajax_referer('cp_nonce', 'nonce');
-        
-        if (!isset($_POST['telegram_id'])) {
-            wp_send_json_error(array('message' => 'Telegram ID missing'));
+
+        // Accept either telegram_id or user_id (for Google OAuth users)
+        $telegram_id = isset($_POST['telegram_id']) ? intval($_POST['telegram_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if ($telegram_id) {
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        } elseif ($user_id) {
+            $user = CP()->database->get_user_by_id($user_id);
+        } else {
+            wp_send_json_error(array('message' => 'User ID missing'));
             return;
         }
-        
-        $telegram_id = intval($_POST['telegram_id']);
-        $user = CP()->database->get_user_by_telegram_id($telegram_id);
-        
+
         if (!$user) {
             wp_send_json_error(array('message' => 'User not found'));
             return;
@@ -338,13 +348,18 @@ class CP_Ajax {
     public function get_customer_links() {
         check_ajax_referer('cp_nonce', 'nonce');
 
-        if (!isset($_POST['telegram_id'])) {
-            wp_send_json_error(array('message' => 'Telegram ID missing'));
+        // Accept either telegram_id or user_id (for Google OAuth users)
+        $telegram_id = isset($_POST['telegram_id']) ? intval($_POST['telegram_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if ($telegram_id) {
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        } elseif ($user_id) {
+            $user = CP()->database->get_user_by_id($user_id);
+        } else {
+            wp_send_json_error(array('message' => 'User ID missing'));
             return;
         }
-
-        $telegram_id = intval($_POST['telegram_id']);
-        $user = CP()->database->get_user_by_telegram_id($telegram_id);
 
         if (!$user) {
             wp_send_json_error(array('message' => 'User not found'));
@@ -612,13 +627,18 @@ class CP_Ajax {
     public function get_assigned_surveys() {
         check_ajax_referer('cp_nonce', 'nonce');
 
-        if (!isset($_POST['telegram_id'])) {
-            wp_send_json_error(array('message' => 'Telegram ID missing'));
+        // Accept either telegram_id or user_id (for Google OAuth users)
+        $telegram_id = isset($_POST['telegram_id']) ? intval($_POST['telegram_id']) : 0;
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if ($telegram_id) {
+            $user = CP()->database->get_user_by_telegram_id($telegram_id);
+        } elseif ($user_id) {
+            $user = CP()->database->get_user_by_id($user_id);
+        } else {
+            wp_send_json_error(array('message' => 'User ID missing'));
             return;
         }
-
-        $telegram_id = intval($_POST['telegram_id']);
-        $user = CP()->database->get_user_by_telegram_id($telegram_id);
 
         if (!$user) {
             wp_send_json_error(array('message' => 'User not found'));
