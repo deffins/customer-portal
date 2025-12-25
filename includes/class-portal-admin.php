@@ -887,8 +887,9 @@ class CP_Admin {
             $selected_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 
             if ($selected_survey_id && $selected_user_id) {
-                $comments = CP()->database->get_user_supplement_comments($selected_user_id, $selected_survey_id);
-                if (!empty($comments)) {
+                // Use V2 notes system
+                $notes = CP()->database->get_user_supplement_notes($selected_user_id, $selected_survey_id);
+                if (!empty($notes)) {
                     $users = CP()->database->get_active_users();
                     $user = array_filter($users, function($u) use ($selected_user_id) {
                         return $u->id == $selected_user_id;
@@ -896,7 +897,7 @@ class CP_Admin {
                     $user = reset($user);
 
                     if ($user) {
-                        $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $comments, $user);
+                        $this->export_supplement_feedback_txt($selected_survey_id, $selected_user_id, $notes, $user);
                         exit;
                     }
                 }
@@ -1368,10 +1369,11 @@ class CP_Admin {
         $selected_user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 
         $commenters = CP()->database->get_survey_commenters($selected_survey_id);
-        $comments = [];
+        $notes = [];
 
         if ($selected_user_id) {
-            $comments = CP()->database->get_user_supplement_comments($selected_user_id, $selected_survey_id);
+            // Use V2 notes system (append-only with timestamps)
+            $notes = CP()->database->get_user_supplement_notes($selected_user_id, $selected_survey_id);
             $user = CP()->database->get_active_users();
             $user = array_filter($user, function($u) use ($selected_user_id) {
                 return $u->id == $selected_user_id;
@@ -1418,7 +1420,7 @@ class CP_Admin {
                 </table>
             </form>
 
-            <?php if ($selected_user_id && !empty($comments)): ?>
+            <?php if ($selected_user_id && !empty($notes)): ?>
                 <div style="margin-bottom: 20px;">
                     <a href="?page=customer-portal-surveys&view=supplement_feedback&survey_id=<?php echo $selected_survey_id; ?>&user_id=<?php echo $selected_user_id; ?>&export=txt"
                        class="button button-primary">
@@ -1431,23 +1433,25 @@ class CP_Admin {
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <th width="30%">Supplement Name</th>
-                            <th width="60%">Comment</th>
+                            <th width="25%">Supplement Name</th>
+                            <th width="55%">Note</th>
                             <th width="10%">Date</th>
+                            <th width="10%">Time</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($comments as $comment): ?>
+                        <?php foreach ($notes as $note): ?>
                             <tr>
-                                <td><strong><?php echo esc_html($comment->supplement_name); ?></strong></td>
-                                <td><?php echo nl2br(esc_html($comment->comment_text)); ?></td>
-                                <td><?php echo date('M j, Y', strtotime($comment->created_at)); ?></td>
+                                <td><strong><?php echo esc_html($note->supplement_name); ?></strong></td>
+                                <td><?php echo nl2br(esc_html($note->note_text)); ?></td>
+                                <td><?php echo date('M j, Y', strtotime($note->created_at)); ?></td>
+                                <td><?php echo date('H:i', strtotime($note->created_at)); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             <?php elseif ($selected_user_id): ?>
-                <p>This client hasn't added any comments yet.</p>
+                <p>This client hasn't added any notes yet.</p>
             <?php else: ?>
                 <p>Select a client to view their feedback.</p>
             <?php endif; ?>
@@ -1458,7 +1462,7 @@ class CP_Admin {
     /**
      * Export supplement feedback to TXT
      */
-    private function export_supplement_feedback_txt($survey_id, $user_id, $comments, $user) {
+    private function export_supplement_feedback_txt($survey_id, $user_id, $notes, $user) {
         $survey = CP()->database->get_supplement_survey($survey_id);
         $client_name = trim($user->first_name . ' ' . $user->last_name);
 
@@ -1481,9 +1485,22 @@ class CP_Admin {
         echo str_repeat("=", 60) . "\n";
         echo "\n";
 
-        foreach ($comments as $comment) {
-            echo "[" . $comment->supplement_name . "]\n";
-            echo $comment->comment_text . "\n";
+        // Group notes by supplement
+        $grouped_notes = array();
+        foreach ($notes as $note) {
+            if (!isset($grouped_notes[$note->supplement_name])) {
+                $grouped_notes[$note->supplement_name] = array();
+            }
+            $grouped_notes[$note->supplement_name][] = $note;
+        }
+
+        // Output notes grouped by supplement
+        foreach ($grouped_notes as $supplement_name => $supplement_notes) {
+            echo "[" . $supplement_name . "]\n";
+            foreach ($supplement_notes as $note) {
+                $timestamp = date('Y-m-d H:i', strtotime($note->created_at));
+                echo "  (" . $timestamp . ") " . $note->note_text . "\n";
+            }
             echo "\n";
         }
 
