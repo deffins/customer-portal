@@ -244,13 +244,26 @@ class CP_Database {
     public function get_user_by_telegram_id($telegram_id) {
         global $wpdb;
         $table = $wpdb->prefix . 'customer_portal_users';
-        
+
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table} WHERE telegram_id = %d AND is_active = 1",
             intval($telegram_id)
         ));
     }
-    
+
+    /**
+     * Get user by Customer Portal user ID (primary key)
+     */
+    public function get_user_by_id($user_id) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'customer_portal_users';
+
+        return $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE id = %d AND is_active = 1",
+            intval($user_id)
+        ));
+    }
+
     /**
      * Get all active users
      */
