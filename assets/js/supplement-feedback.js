@@ -85,7 +85,34 @@
         if (!currentSurvey.supplements || currentSurvey.supplements.length === 0) {
             html += '<p>No supplements in this survey.</p>';
         } else {
-            currentSurvey.supplements.forEach(function(supplement, index) {
+            // Sort supplements by most recent note first
+            var sortedSupplements = currentSurvey.supplements.slice().sort(function(a, b) {
+                var aLatest = null;
+                var bLatest = null;
+
+                if (a.notes && a.notes.length > 0) {
+                    var lastNoteA = a.notes[a.notes.length - 1];
+                    aLatest = lastNoteA.created_at ? new Date(lastNoteA.created_at) : null;
+                }
+
+                if (b.notes && b.notes.length > 0) {
+                    var lastNoteB = b.notes[b.notes.length - 1];
+                    bLatest = lastNoteB.created_at ? new Date(lastNoteB.created_at) : null;
+                }
+
+                // Sort: most recent first, nulls last
+                if (aLatest && bLatest) {
+                    return bLatest - aLatest; // Descending order
+                } else if (aLatest) {
+                    return -1; // a has notes, b doesn't - a comes first
+                } else if (bLatest) {
+                    return 1; // b has notes, a doesn't - b comes first
+                } else {
+                    return 0; // Neither has notes - maintain original order
+                }
+            });
+
+            sortedSupplements.forEach(function(supplement, index) {
                 var hasNotes = supplement.has_notes || false;
                 var lastNotePreview = '';
 
@@ -215,30 +242,65 @@
      * Expand supplement editor inline
      */
     function expandSupplementEditor(index) {
-        // First collapse all other editors and show their buttons
-        var allItems = document.querySelectorAll('.supplement-list-item-v2');
-        for (var i = 0; i < allItems.length; i++) {
-            var editor = allItems[i].querySelector('.supplement-editor-section-v2');
-            var button = allItems[i].querySelector('.supplement-add-btn');
-            if (editor) editor.style.display = 'none';
-            if (button) button.style.display = 'block';
+        // Reload survey data to get latest notes before expanding
+        reloadSurveyData(function() {
+            // First collapse all other editors and show their buttons
+            var allItems = document.querySelectorAll('.supplement-list-item-v2');
+            for (var i = 0; i < allItems.length; i++) {
+                var editor = allItems[i].querySelector('.supplement-editor-section-v2');
+                var button = allItems[i].querySelector('.supplement-add-btn');
+                if (editor) editor.style.display = 'none';
+                if (button) button.style.display = 'block';
+            }
+
+            // Refresh the list view with latest data
+            showSupplementListView();
+
+            // Now expand the selected editor and hide its button
+            var items = document.querySelectorAll('.supplement-list-item-v2');
+            if (items[index]) {
+                var editor = items[index].querySelector('.supplement-editor-section-v2');
+                var textarea = items[index].querySelector('.supplement-textarea-v2');
+                var button = items[index].querySelector('.supplement-add-btn');
+
+                if (editor && textarea) {
+                    editor.style.display = 'block';
+                    textarea.focus();
+                }
+                if (button) {
+                    button.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    /**
+     * Reload survey data to get latest notes
+     */
+    function reloadSurveyData(callback) {
+        if (!currentSurvey) {
+            if (callback) callback();
+            return;
         }
 
-        // Expand the selected editor and hide its button
-        var items = document.querySelectorAll('.supplement-list-item-v2');
-        if (items[index]) {
-            var editor = items[index].querySelector('.supplement-editor-section-v2');
-            var textarea = items[index].querySelector('.supplement-textarea-v2');
-            var button = items[index].querySelector('.supplement-add-btn');
-
-            if (editor && textarea) {
-                editor.style.display = 'block';
-                textarea.focus();
-            }
-            if (button) {
-                button.style.display = 'none';
-            }
+        var telegramId = window.cpGetUserTelegramId ? window.cpGetUserTelegramId() : null;
+        if (!telegramId) {
+            if (callback) callback();
+            return;
         }
+
+        ajaxPost({
+            action: 'cp_get_supplement_survey_v2',
+            survey_id: currentSurvey.id,
+            telegram_id: telegramId,
+            nonce: CONFIG.nonce
+        }, function(response) {
+            currentSurvey = response.data.survey;
+            if (callback) callback();
+        }, function(error) {
+            console.error('Failed to reload survey:', error);
+            if (callback) callback();
+        });
     }
 
     /**
