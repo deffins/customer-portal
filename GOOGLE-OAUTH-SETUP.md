@@ -99,9 +99,9 @@ The following functions are now available in the database class:
 3. Create new user
 ```
 
-## Phase 4: Add Custom Hooks
+## Phase 4: Add Custom Hooks ✅ COMPLETED
 
-Create file: `customer-portal-oauth-hooks.php` in the plugin root:
+File created: `customer-portal-oauth-hooks.php` in the plugin root:
 
 ```php
 <?php

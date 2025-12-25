@@ -105,6 +105,18 @@ class CP_Frontend {
                 <h2>Customer Portal Login</h2>
                 <p>Please login with your Telegram account to access your files.</p>
                 <div id="telegram-login"></div>
+
+                <!-- Google Login Button -->
+                <div style="margin-top: 20px; text-align: center;">
+                    <p style="color: #666; font-size: 14px; margin-bottom: 10px;">or</p>
+                    <?php
+                    // Add Nextend Social Login button for Google
+                    if (function_exists('the_nsl_login_buttons')) {
+                        the_nsl_login_buttons();
+                    }
+                    ?>
+                </div>
+
                 <p id="login-status" style="color: #666; font-size: 14px; margin-top: 10px;"></p>
             </div>
             

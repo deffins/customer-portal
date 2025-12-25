@@ -7,10 +7,9 @@
       "Bash(dir:*)",
       "Bash(powershell -Command:*)",
       "Bash(tar:*)",
-      "Bash(git checkout:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(del nul)"
+      "Bash(git merge:*)",
+      "Bash(git stash:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []

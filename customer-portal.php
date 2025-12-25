@@ -21,6 +21,11 @@ require_once CP_PLUGIN_DIR . 'includes/class-portal-ajax.php';
 require_once CP_PLUGIN_DIR . 'includes/class-portal-admin.php';
 require_once CP_PLUGIN_DIR . 'includes/class-portal-frontend.php';
 
+// Include OAuth hooks (for Google login integration)
+if (file_exists(CP_PLUGIN_DIR . 'customer-portal-oauth-hooks.php')) {
+    require_once CP_PLUGIN_DIR . 'customer-portal-oauth-hooks.php';
+}
+
 /**
  * Main Plugin Class
  */
