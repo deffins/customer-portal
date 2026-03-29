@@ -22,6 +22,9 @@ wp-content/wp-cache-config.php
 .env.test
 .env.production
 
+# Claude Code local settings
+.claude/
+
 # Logs
 *.log
 npm-debug.log*
